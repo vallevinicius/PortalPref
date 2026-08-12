@@ -8,7 +8,8 @@ interface UserRow extends RowDataPacket {
   id: number
   username: string
   password_hash: string
-  role: 'super_admin' | 'admin' | 'user'
+  role: 'super_admin' | 'secretaria_admin'
+  secretaria_id: number | null
 }
 
 export async function POST(request: Request) {
@@ -19,14 +20,22 @@ export async function POST(request: Request) {
   }
 
   const pool = getPool()
-  const [rows] = await pool.query<UserRow[]>('SELECT id, username, password_hash, role FROM users WHERE username = ? LIMIT 1', [username])
+  const [rows] = await pool.query<UserRow[]>(
+    'SELECT id, username, password_hash, role, secretaria_id FROM users WHERE username = ? LIMIT 1',
+    [username],
+  )
   const user = rows[0]
 
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
     return NextResponse.json({ error: 'Usuário ou senha inválidos.' }, { status: 401 })
   }
 
-  const token = await createSessionToken({ userId: user.id, username: user.username, role: user.role })
+  const token = await createSessionToken({
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    secretariaId: user.secretaria_id,
+  })
   await setSessionCookie(token)
 
   return NextResponse.json({ ok: true, role: user.role })

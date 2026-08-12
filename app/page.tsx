@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import {
   AlertTriangle,
@@ -19,7 +20,37 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export default function Page() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
+  const [credential, setCredential] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: credential, password }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setError(data?.error ?? 'Não foi possível entrar.')
+        return
+      }
+
+      router.push('/admin')
+      router.refresh()
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <main className="portal-shell relative flex min-h-svh items-center justify-center overflow-hidden px-4 py-8 text-foreground sm:px-6">
@@ -60,12 +91,21 @@ export default function Page() {
             </p>
           </div>
 
-          <form className="flex flex-col gap-5" onSubmit={(event) => event.preventDefault()}>
+          <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
             <div className="flex flex-col gap-2">
               <Label htmlFor="credential">Matrícula Institucional ou CPF</Label>
               <div className="relative">
                 <UserRound aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="credential" name="credential" autoComplete="username" placeholder="Digite sua matrícula ou CPF" className="h-11 pl-10" />
+                <Input
+                  id="credential"
+                  name="credential"
+                  autoComplete="username"
+                  placeholder="Digite sua matrícula ou CPF"
+                  className="h-11 pl-10"
+                  value={credential}
+                  onChange={(e) => setCredential(e.target.value)}
+                  required
+                />
               </div>
             </div>
 
@@ -73,7 +113,17 @@ export default function Page() {
               <Label htmlFor="password">Senha de Acesso</Label>
               <div className="relative">
                 <LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Digite sua senha" className="h-11 pl-10 pr-11" />
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder="Digite sua senha"
+                  className="h-11 pl-10 pr-11"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
                 <Button type="button" variant="ghost" size="icon" aria-label={showPassword ? 'Ocultar senha' : 'Revelar senha'} onClick={() => setShowPassword((visible) => !visible)} className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff /> : <Eye />}
                 </Button>
@@ -87,9 +137,15 @@ export default function Page() {
               </Label>
             </div>
 
-            <Button type="submit" size="lg" className="h-12 w-full gap-2 bg-primary font-semibold shadow-md shadow-primary/20 hover:bg-primary/90">
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" size="lg" disabled={loading} className="h-12 w-full gap-2 bg-primary font-semibold shadow-md shadow-primary/20 hover:bg-primary/90">
               <LogIn data-icon="inline-start" />
-              Autenticar e Entrar
+              {loading ? 'Autenticando...' : 'Autenticar e Entrar'}
             </Button>
           </form>
         </CardContent>

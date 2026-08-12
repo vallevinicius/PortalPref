@@ -12,6 +12,7 @@ export function getPool() {
       database: process.env.DB_NAME,
       waitForConnections: true,
       connectionLimit: 10,
+      dateStrings: true,
     })
   }
   return pool

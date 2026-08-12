@@ -4,10 +4,13 @@ import { cookies } from 'next/headers'
 export const SESSION_COOKIE = 'session'
 const SESSION_DURATION_SECONDS = 60 * 60 * 8 // 8 horas
 
+export type Role = 'super_admin' | 'secretaria_admin'
+
 export type SessionPayload = {
   userId: number
   username: string
-  role: 'super_admin' | 'admin' | 'user'
+  role: Role
+  secretariaId: number | null
 }
 
 function getSecretKey() {
@@ -56,4 +59,14 @@ export async function getSession() {
   const token = cookieStore.get(SESSION_COOKIE)?.value
   if (!token) return null
   return verifySessionToken(token)
+}
+
+export class UnauthorizedError extends Error {}
+
+export async function requireSession(...allowedRoles: Role[]) {
+  const session = await getSession()
+  if (!session || (allowedRoles.length > 0 && !allowedRoles.includes(session.role))) {
+    throw new UnauthorizedError('Acesso não autorizado.')
+  }
+  return session
 }
