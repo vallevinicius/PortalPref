@@ -1,10 +1,11 @@
 'use client'
 
-import { Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Minus, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,12 +32,16 @@ function formatValor(valor: number, unidade: string | null) {
   return unidade ? `${numero} ${unidade}` : numero
 }
 
-function formatDataCurta(data: string) {
-  return new Date(`${data}T00:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-}
+const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
 function formatDataLonga(data: string) {
   return new Date(`${data}T00:00:00`).toLocaleDateString('pt-BR')
+}
+
+interface MonthlyPoint {
+  mes: string
+  valor: number | null
+  data_referencia: string | null
 }
 
 function ChartTooltip({
@@ -45,58 +50,131 @@ function ChartTooltip({
   unidade,
 }: {
   active?: boolean
-  payload?: { payload: Indicador }[]
+  payload?: { payload: MonthlyPoint }[]
   unidade: string | null
 }) {
   if (!active || !payload?.length) return null
   const point = payload[0].payload
+  if (point.valor === null || point.data_referencia === null) return null
   return (
     <div className="rounded-lg bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-foreground/10">
-      <p className="font-semibold text-foreground">{formatValor(point.valor, unidade)}</p>
+      <div className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="h-0.5 w-3 rounded-full" style={{ backgroundColor: LINE_COLOR }} />
+        <p className="font-semibold text-foreground">{formatValor(point.valor, unidade)}</p>
+      </div>
       <p className="text-xs text-muted-foreground">{formatDataLonga(point.data_referencia)}</p>
+    </div>
+  )
+}
+
+function DeltaBadge({ delta, deltaPct }: { delta: number; deltaPct: number | null }) {
+  if (delta === 0) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        <Minus className="size-3" />
+        estável
+      </span>
+    )
+  }
+
+  const subiu = delta > 0
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium',
+        subiu ? 'bg-accent/15 text-[#00504c]' : 'bg-destructive/10 text-destructive',
+      )}
+    >
+      {subiu ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}
+      {deltaPct !== null ? `${Math.abs(deltaPct).toFixed(0)}%` : Math.abs(delta)}
+    </span>
+  )
+}
+
+function BarValueLabel(props: Record<string, unknown> & { unidade: string | null }) {
+  const { x, y, width, value, unidade } = props
+  if (typeof x !== 'number' || typeof y !== 'number' || typeof width !== 'number' || typeof value !== 'number') {
+    return null
+  }
+  return (
+    <text x={x + width / 2} y={y - 6} textAnchor="middle" fontSize={11} fontWeight={600} fill="#0b0b0b">
+      {formatValor(value, unidade)}
+    </text>
+  )
+}
+
+function buildMonthlyData(pontos: Indicador[], ano: number): MonthlyPoint[] {
+  const porMes = new Map<number, Indicador>()
+  for (const ponto of pontos) {
+    const data = new Date(`${ponto.data_referencia}T00:00:00`)
+    if (data.getFullYear() === ano) {
+      porMes.set(data.getMonth(), ponto)
+    }
+  }
+
+  return MESES.map((mes, indiceMes) => {
+    const ponto = porMes.get(indiceMes)
+    return {
+      mes,
+      valor: ponto ? ponto.valor : null,
+      data_referencia: ponto?.data_referencia ?? null,
+    }
+  })
+}
+
+function YearSwitcher({ ano, onChange }: { ano: number; onChange: (proximoAno: number) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(ano - 1)} aria-label="Ano anterior">
+        <ChevronLeft className="size-4" />
+      </Button>
+      <span className="w-11 text-center text-sm font-medium text-foreground">{ano}</span>
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(ano + 1)} aria-label="Próximo ano">
+        <ChevronRight className="size-4" />
+      </Button>
     </div>
   )
 }
 
 function IndicadorChart({ titulo, pontos }: { titulo: string; pontos: Indicador[] }) {
   const unidade = pontos[0]?.unidade ?? null
+  const primeiro = pontos[0].valor
+  const ultimo = pontos[pontos.length - 1].valor
+  const delta = ultimo - primeiro
+  const deltaPct = primeiro !== 0 ? (delta / Math.abs(primeiro)) * 100 : null
+  const anoInicial = new Date(`${pontos[pontos.length - 1].data_referencia}T00:00:00`).getFullYear()
+  const [ano, setAno] = useState(anoInicial)
+  const dadosMensais = useMemo(() => buildMonthlyData(pontos, ano), [pontos, ano])
+
   return (
     <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
-      <p className="mb-3 text-sm font-medium text-foreground">{titulo}</p>
-      <div className="h-48">
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-foreground">{titulo}</p>
+        <DeltaBadge delta={delta} deltaPct={deltaPct} />
+      </div>
+      <div className="mb-2 flex items-end justify-between gap-2">
+        <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValor(ultimo, unidade)}</p>
+        <YearSwitcher ano={ano} onChange={setAno} />
+      </div>
+      <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={pontos} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          <BarChart data={dadosMensais} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke={GRID_COLOR} />
             <XAxis
-              dataKey="data_referencia"
-              tickFormatter={formatDataCurta}
+              dataKey="mes"
               tick={{ fontSize: 11, fill: MUTED_TEXT }}
               axisLine={{ stroke: GRID_COLOR }}
               tickLine={false}
+              interval={0}
             />
-            <YAxis tick={{ fontSize: 11, fill: MUTED_TEXT }} axisLine={false} tickLine={false} width={48} />
-            <Tooltip content={<ChartTooltip unidade={unidade} />} />
-            <Line
-              type="monotone"
-              dataKey="valor"
-              stroke={LINE_COLOR}
-              strokeWidth={2}
-              dot={{ r: 4, fill: LINE_COLOR, stroke: '#ffffff', strokeWidth: 2 }}
-              activeDot={{ r: 5, fill: LINE_COLOR, stroke: '#ffffff', strokeWidth: 2 }}
-            />
-          </LineChart>
+            <YAxis tick={{ fontSize: 11, fill: MUTED_TEXT }} axisLine={false} tickLine={false} width={44} />
+            <Tooltip content={<ChartTooltip unidade={unidade} />} cursor={{ fill: 'rgba(0,110,109,0.07)' }} />
+            <Bar dataKey="valor" fill={LINE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={22}>
+              <LabelList dataKey="valor" content={(props) => <BarValueLabel {...props} unidade={unidade} />} />
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
-  )
-}
-
-function IndicadorStatTile({ titulo, ponto }: { titulo: string; ponto: Indicador }) {
-  return (
-    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
-      <p className="text-sm font-medium text-muted-foreground">{titulo}</p>
-      <p className="mt-1 text-3xl font-semibold text-foreground">{formatValor(ponto.valor, ponto.unidade)}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{formatDataLonga(ponto.data_referencia)}</p>
     </div>
   )
 }
@@ -253,13 +331,9 @@ export function ProjetoDashboard({ projeto, editable }: { projeto: Projeto; edit
         <p className="text-sm text-muted-foreground">Nenhum número lançado ainda por este projeto.</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {grupos.map((grupo) =>
-            grupo.pontos.length >= 2 ? (
-              <IndicadorChart key={grupo.titulo} titulo={grupo.titulo} pontos={grupo.pontos} />
-            ) : (
-              <IndicadorStatTile key={grupo.titulo} titulo={grupo.titulo} ponto={grupo.pontos[0]} />
-            ),
-          )}
+          {grupos.map((grupo) => (
+            <IndicadorChart key={grupo.titulo} titulo={grupo.titulo} pontos={grupo.pontos} />
+          ))}
         </div>
       )}
 
