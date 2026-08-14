@@ -12,6 +12,7 @@ import {
   EyeOff,
   UserRound,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
@@ -24,12 +25,10 @@ export default function Page() {
   const [showPassword, setShowPassword] = useState(false)
   const [credential, setCredential] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    setError(null)
     setLoading(true)
 
     try {
@@ -41,7 +40,7 @@ export default function Page() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null)
-        setError(data?.error ?? 'Não foi possível entrar.')
+        toast.error(data?.error ?? 'Não foi possível entrar.')
         return
       }
 
@@ -93,7 +92,7 @@ export default function Page() {
 
           <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="credential">Matrícula Institucional ou CPF</Label>
+              <Label htmlFor="credential">Usuário</Label>
               <div className="relative">
                 <UserRound aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -136,12 +135,6 @@ export default function Page() {
                 Lembrar minha credencial neste dispositivo seguro
               </Label>
             </div>
-
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
 
             <Button type="submit" size="lg" disabled={loading} className="h-12 w-full gap-2 bg-primary font-semibold shadow-md shadow-primary/20 hover:bg-primary/90">
               <LogIn data-icon="inline-start" />

@@ -46,6 +46,8 @@ async function main() {
     pool,
     'ALTER TABLE users ADD CONSTRAINT fk_users_secretaria FOREIGN KEY (secretaria_id) REFERENCES secretarias(id) ON DELETE SET NULL',
   )
+  await ignoreDuplicate(pool, 'ALTER TABLE users ADD COLUMN password_encrypted VARCHAR(512) NULL')
+  await ignoreDuplicate(pool, 'ALTER TABLE projetos ADD UNIQUE KEY uq_projetos_secretaria_nome (secretaria_id, nome)')
 
   const passwordHash = await bcrypt.hash(password, 12)
 

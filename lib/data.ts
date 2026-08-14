@@ -15,6 +15,11 @@ export interface SecretariaAdmin {
   secretaria_nome: string
 }
 
+export interface SuperAdmin {
+  id: number
+  username: string
+}
+
 export interface Indicador {
   id: number
   titulo: string
@@ -30,6 +35,33 @@ export interface Projeto {
   secretaria_id: number
   secretaria_nome: string
   indicadores: Indicador[]
+}
+
+export async function getSecretariaById(id: number): Promise<Secretaria | null> {
+  const pool = getPool()
+  const [rows] = await pool.query<(Secretaria & RowDataPacket)[]>(
+    `SELECT s.id, s.nome, s.slug, COUNT(p.id) AS projetos_count
+     FROM secretarias s
+     LEFT JOIN projetos p ON p.secretaria_id = s.id
+     WHERE s.id = ?
+     GROUP BY s.id, s.nome, s.slug`,
+    [id],
+  )
+  const row = rows[0]
+  return row ? { ...row, projetos_count: Number(row.projetos_count) } : null
+}
+
+export async function getSecretariaAdminBySecretariaId(secretariaId: number): Promise<SecretariaAdmin | null> {
+  const pool = getPool()
+  const [rows] = await pool.query<(SecretariaAdmin & RowDataPacket)[]>(
+    `SELECT u.id, u.username, u.secretaria_id, s.nome AS secretaria_nome
+     FROM users u
+     JOIN secretarias s ON s.id = u.secretaria_id
+     WHERE u.role = 'secretaria_admin' AND u.secretaria_id = ?
+     LIMIT 1`,
+    [secretariaId],
+  )
+  return rows[0] ?? null
 }
 
 export async function getSecretarias(): Promise<Secretaria[]> {
@@ -52,6 +84,14 @@ export async function getSecretariaAdmins(): Promise<SecretariaAdmin[]> {
      JOIN secretarias s ON s.id = u.secretaria_id
      WHERE u.role = 'secretaria_admin'
      ORDER BY s.nome ASC, u.username ASC`,
+  )
+  return rows
+}
+
+export async function getSuperAdmins(): Promise<SuperAdmin[]> {
+  const pool = getPool()
+  const [rows] = await pool.query<(SuperAdmin & RowDataPacket)[]>(
+    `SELECT id, username FROM users WHERE role = 'super_admin' ORDER BY username ASC`,
   )
   return rows
 }
@@ -99,7 +139,7 @@ function groupProjetos(rows: ProjetoJoinRow[]): Projeto[] {
   return Array.from(byId.values())
 }
 
-export async function getAllProjetosComIndicadores(): Promise<Projeto[]> {
+export async function getProjetoComIndicadores(projetoId: number): Promise<Projeto | null> {
   const pool = getPool()
   const [rows] = await pool.query<ProjetoJoinRow[]>(
     `SELECT
@@ -110,9 +150,11 @@ export async function getAllProjetosComIndicadores(): Promise<Projeto[]> {
      FROM projetos p
      JOIN secretarias s ON s.id = p.secretaria_id
      LEFT JOIN indicadores i ON i.projeto_id = p.id
-     ORDER BY s.nome ASC, p.created_at DESC, i.data_referencia ASC`,
+     WHERE p.id = ?
+     ORDER BY i.data_referencia ASC`,
+    [projetoId],
   )
-  return groupProjetos(rows)
+  return groupProjetos(rows)[0] ?? null
 }
 
 export async function getProjetosComIndicadores(secretariaId: number): Promise<Projeto[]> {

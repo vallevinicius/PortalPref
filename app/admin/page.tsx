@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
-import { getAllProjetosComIndicadores, getProjetosComIndicadores, getSecretariaAdmins, getSecretarias } from '@/lib/data'
-import { LogoutButton } from './logout-button'
+import { getProjetosComIndicadores, getSecretariaAdmins, getSecretarias, getSuperAdmins } from '@/lib/data'
+import { AdminHeader } from './admin-header'
 import { SecretariaAdminDashboard } from './secretaria-admin-dashboard'
 import { SuperAdminDashboard } from './super-admin-dashboard'
 
@@ -10,19 +10,11 @@ export default async function AdminPage() {
   if (!session) redirect('/')
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-6 sm:p-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Portal de Dados Integrados</h1>
-          <p className="text-sm text-muted-foreground">
-            {session.role === 'super_admin' ? 'Painel da Prefeita' : 'Painel da Secretaria'} — {session.username}
-          </p>
-        </div>
-        <LogoutButton />
-      </div>
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 p-6 sm:p-8">
+      <AdminHeader subtitle={`${session.role === 'super_admin' ? 'Painel da Prefeita' : 'Painel da Secretaria'} | ${session.username}`} />
 
       {session.role === 'super_admin' ? (
-        <SuperAdminDashboardData />
+        <SuperAdminDashboardData currentUsername={session.username} />
       ) : (
         <SecretariaAdminDashboardData secretariaId={session.secretariaId} />
       )}
@@ -30,14 +22,12 @@ export default async function AdminPage() {
   )
 }
 
-async function SuperAdminDashboardData() {
-  const [secretarias, admins, projetos] = await Promise.all([
-    getSecretarias(),
-    getSecretariaAdmins(),
-    getAllProjetosComIndicadores(),
-  ])
+async function SuperAdminDashboardData({ currentUsername }: { currentUsername: string }) {
+  const [secretarias, admins, superAdmins] = await Promise.all([getSecretarias(), getSecretariaAdmins(), getSuperAdmins()])
 
-  return <SuperAdminDashboard secretarias={secretarias} admins={admins} projetos={projetos} />
+  return (
+    <SuperAdminDashboard secretarias={secretarias} admins={admins} superAdmins={superAdmins} currentUsername={currentUsername} />
+  )
 }
 
 async function SecretariaAdminDashboardData({ secretariaId }: { secretariaId: number | null }) {

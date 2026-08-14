@@ -14,7 +14,14 @@ export async function createSecretaria(nome: string) {
   }
 
   const pool = getPool()
-  await pool.query('INSERT INTO secretarias (nome, slug) VALUES (?, ?)', [trimmed, slugify(trimmed)])
+  try {
+    await pool.query('INSERT INTO secretarias (nome, slug) VALUES (?, ?)', [trimmed, slugify(trimmed)])
+  } catch (err) {
+    if ((err as { code?: string }).code === 'ER_DUP_ENTRY') {
+      throw new Error('Já existe uma secretaria com esse nome.')
+    }
+    throw err
+  }
 
   revalidatePath('/admin')
 }

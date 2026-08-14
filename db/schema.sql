@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  password_encrypted VARCHAR(512) NULL,
   role ENUM('super_admin', 'secretaria_admin') NOT NULL,
   secretaria_id INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -25,7 +26,8 @@ CREATE TABLE IF NOT EXISTS projetos (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_projetos_secretaria FOREIGN KEY (secretaria_id) REFERENCES secretarias(id) ON DELETE CASCADE,
-  CONSTRAINT fk_projetos_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+  CONSTRAINT fk_projetos_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_projetos_secretaria_nome (secretaria_id, nome)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS indicadores (
