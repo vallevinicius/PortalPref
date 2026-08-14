@@ -21,7 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { GeneratedPasswordBanner, type Credential } from './credential-components'
+import { ConfirmPasswordDialog, GeneratedPasswordBanner, type Credential } from './credential-components'
 import { createSecretaria } from '@/lib/actions/secretarias'
 import { createSuperAdmin, getSuperAdminPassword, resetSuperAdminPassword } from '@/lib/actions/users'
 import type { Secretaria, SecretariaAdmin, SuperAdmin } from '@/lib/data'
@@ -192,6 +192,7 @@ function SuperAdminRow({
   const [resetPending, setResetPending] = useState(false)
   const [viewPending, setViewPending] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
+  const [confirmViewOpen, setConfirmViewOpen] = useState(false)
 
   function handleReset() {
     setResetPending(true)
@@ -207,11 +208,12 @@ function SuperAdminRow({
       .finally(() => setResetPending(false))
   }
 
-  function handleViewPassword() {
+  function handleViewPassword(confirmPassword: string) {
     setViewPending(true)
-    getSuperAdminPassword(superAdmin.id)
+    getSuperAdminPassword(superAdmin.id, confirmPassword)
       .then((result) => {
         onCredentialRevealed({ username: superAdmin.username, password: result.password })
+        setConfirmViewOpen(false)
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Não foi possível mostrar a senha.')
@@ -226,7 +228,7 @@ function SuperAdminRow({
         {isCurrentUser && <span className="ml-2 text-xs font-sans text-muted-foreground">(você)</span>}
       </span>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={handleViewPassword} disabled={viewPending} className="gap-1.5">
+        <Button variant="outline" size="sm" onClick={() => setConfirmViewOpen(true)} disabled={viewPending} className="gap-1.5">
           <Eye className="size-3.5" />
           {viewPending ? 'Carregando...' : 'Ver senha atual'}
         </Button>
@@ -235,6 +237,8 @@ function SuperAdminRow({
           {resetPending ? 'Gerando...' : 'Gerar nova senha'}
         </Button>
       </div>
+
+      <ConfirmPasswordDialog open={confirmViewOpen} onOpenChange={setConfirmViewOpen} onConfirm={handleViewPassword} pending={viewPending} />
 
       <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
         <AlertDialogContent>

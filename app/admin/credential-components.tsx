@@ -15,12 +15,65 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createSecretariaUser, getSecretariaUserPassword, resetSecretariaUserPassword } from '@/lib/actions/users'
 import type { SecretariaAdmin } from '@/lib/data'
 
 export type Credential = { username: string; password: string }
+
+export function ConfirmPasswordDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  pending,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: (password: string) => void
+  pending: boolean
+}) {
+  const [password, setPassword] = useState('')
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    onConfirm(password)
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        if (!next) setPassword('')
+      }}
+    >
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Confirme sua senha</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="confirm-own-password">Digite sua senha para ver esta senha</Label>
+            <Input
+              id="confirm-own-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+              required
+            />
+          </div>
+          <Button type="submit" disabled={pending || !password}>
+            {pending ? 'Verificando...' : 'Confirmar e ver senha'}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export function GeneratedPasswordBanner({ credential, onDismiss }: { credential: Credential; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false)
@@ -89,6 +142,7 @@ export function SecretariaUserPanel({ secretariaId, admin }: { secretariaId: num
   const [resetPending, setResetPending] = useState(false)
   const [viewPending, setViewPending] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
+  const [confirmViewOpen, setConfirmViewOpen] = useState(false)
   const [revealedCredential, setRevealedCredential] = useState<Credential | null>(null)
 
   function handleReset() {
@@ -106,12 +160,13 @@ export function SecretariaUserPanel({ secretariaId, admin }: { secretariaId: num
       .finally(() => setResetPending(false))
   }
 
-  function handleViewPassword() {
+  function handleViewPassword(confirmPassword: string) {
     if (!admin) return
     setViewPending(true)
-    getSecretariaUserPassword(admin.id)
+    getSecretariaUserPassword(admin.id, confirmPassword)
       .then((result) => {
         setRevealedCredential({ username: admin.username, password: result.password })
+        setConfirmViewOpen(false)
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : 'Não foi possível mostrar a senha.')
@@ -131,7 +186,7 @@ export function SecretariaUserPanel({ secretariaId, admin }: { secretariaId: num
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
           <span className="font-mono text-sm">{admin.username}</span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleViewPassword} disabled={viewPending} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => setConfirmViewOpen(true)} disabled={viewPending} className="gap-1.5">
               <Eye className="size-3.5" />
               {viewPending ? 'Carregando...' : 'Ver senha atual'}
             </Button>
@@ -144,6 +199,8 @@ export function SecretariaUserPanel({ secretariaId, admin }: { secretariaId: num
       ) : (
         <NovoUsuarioForm secretariaId={secretariaId} onCreated={setRevealedCredential} />
       )}
+
+      <ConfirmPasswordDialog open={confirmViewOpen} onOpenChange={setConfirmViewOpen} onConfirm={handleViewPassword} pending={viewPending} />
 
       <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
         <AlertDialogContent>

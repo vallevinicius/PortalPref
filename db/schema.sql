@@ -43,3 +43,13 @@ CREATE TABLE IF NOT EXISTS indicadores (
   CONSTRAINT fk_indicadores_projeto FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
   CONSTRAINT fk_indicadores_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  actor_user_id INT NOT NULL,
+  action VARCHAR(50) NOT NULL,
+  target_user_id INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_audit_log_actor FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_audit_log_target FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

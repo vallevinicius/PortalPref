@@ -17,6 +17,28 @@ interface UserPasswordRow extends RowDataPacket {
   password_encrypted: string | null
 }
 
+interface UserAuthRow extends RowDataPacket {
+  password_hash: string
+}
+
+async function verifyOwnPassword(userId: number, confirmPassword: string) {
+  const pool = getPool()
+  const [rows] = await pool.query<UserAuthRow[]>('SELECT password_hash FROM users WHERE id = ? LIMIT 1', [userId])
+  const row = rows[0]
+  if (!row || !(await bcrypt.compare(confirmPassword, row.password_hash))) {
+    throw new Error('Senha incorreta.')
+  }
+}
+
+async function recordPasswordView(actorUserId: number, targetUserId: number) {
+  const pool = getPool()
+  await pool.query('INSERT INTO audit_log (actor_user_id, action, target_user_id) VALUES (?, ?, ?)', [
+    actorUserId,
+    'view_password',
+    targetUserId,
+  ])
+}
+
 export async function createSecretariaUser(username: string, secretariaId: number) {
   await requireSession('super_admin')
 
@@ -73,8 +95,9 @@ export async function resetSecretariaUserPassword(userId: number) {
   return { password }
 }
 
-export async function getSecretariaUserPassword(userId: number) {
-  await requireSession('super_admin')
+export async function getSecretariaUserPassword(userId: number, confirmPassword: string) {
+  const session = await requireSession('super_admin')
+  await verifyOwnPassword(session.userId, confirmPassword)
 
   const pool = getPool()
   const [rows] = await pool.query<(UserRow & UserPasswordRow)[]>(
@@ -90,6 +113,8 @@ export async function getSecretariaUserPassword(userId: number) {
   if (!target.password_encrypted) {
     throw new Error('Esta senha foi definida antes deste recurso existir. Gere uma nova senha para poder visualizá-la.')
   }
+
+  await recordPasswordView(session.userId, target.id)
 
   return { password: decryptSecret(target.password_encrypted) }
 }
@@ -150,8 +175,9 @@ export async function resetSuperAdminPassword(userId: number) {
   return { password }
 }
 
-export async function getSuperAdminPassword(userId: number) {
-  await requireSession('super_admin')
+export async function getSuperAdminPassword(userId: number, confirmPassword: string) {
+  const session = await requireSession('super_admin')
+  await verifyOwnPassword(session.userId, confirmPassword)
 
   const pool = getPool()
   const [rows] = await pool.query<(UserRow & UserPasswordRow)[]>(
@@ -167,6 +193,8 @@ export async function getSuperAdminPassword(userId: number) {
   if (!target.password_encrypted) {
     throw new Error('Esta senha foi definida antes deste recurso existir. Gere uma nova senha para poder visualizá-la.')
   }
+
+  await recordPasswordView(session.userId, target.id)
 
   return { password: decryptSecret(target.password_encrypted) }
 }
