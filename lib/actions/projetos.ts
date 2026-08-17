@@ -2,12 +2,13 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
+import { recordAuditLog } from '@/lib/audit-log'
 import { prisma } from '@/lib/prisma'
 
 async function getAuthorizedProjeto(projetoId: number, session: SessionPayload) {
   const projeto = await prisma.projeto.findUnique({
     where: { id: projetoId },
-    select: { id: true, secretariaId: true },
+    select: { id: true, nome: true, secretariaId: true },
   })
 
   if (!projeto) {
@@ -50,13 +51,21 @@ export async function createProjeto(nome: string, descricao: string, secretariaI
     throw new Error('Informe o nome do projeto.')
   }
 
-  await prisma.projeto.create({
+  const projeto = await prisma.projeto.create({
     data: {
       secretariaId: targetSecretariaId,
       nome: trimmed,
       descricao: descricao.trim() || null,
       createdBy: session.userId,
     },
+  })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'project.create',
+    entityType: 'project',
+    entityId: projeto.id,
+    details: { nome: projeto.nome, secretariaId: projeto.secretariaId },
   })
 
   revalidatePath('/admin')
@@ -80,6 +89,14 @@ export async function updateProjeto(projetoId: number, nome: string, descricao: 
     },
   })
 
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'project.update',
+    entityType: 'project',
+    entityId: projetoId,
+    details: { nome: trimmed, secretariaId: projeto.secretariaId },
+  })
+
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
   revalidatePath(`/admin/projetos/${projetoId}`)
@@ -90,6 +107,14 @@ export async function deleteProjeto(projetoId: number) {
   const projeto = await getAuthorizedProjeto(projetoId, session)
 
   await prisma.projeto.delete({ where: { id: projetoId } })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'project.delete',
+    entityType: 'project',
+    entityId: projetoId,
+    details: { nome: projeto.nome, secretariaId: projeto.secretariaId },
+  })
 
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)

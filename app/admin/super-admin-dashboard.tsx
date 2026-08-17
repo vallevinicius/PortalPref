@@ -1,6 +1,6 @@
 'use client'
 
-import { Eye, KeyRound, Plus, ShieldPlus } from 'lucide-react'
+import { Eye, KeyRound, Plus, ScrollText, ShieldPlus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -325,6 +325,13 @@ export function SuperAdminDashboard({
       </div>
 
       <NovaSecretariaDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      <div className="flex justify-start">
+        <Link href="/admin/audit-log" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
+          <ScrollText className="size-4" />
+          Ver audit log completo
+        </Link>
+      </div>
 
       <SecretariaGrid secretarias={secretarias} admins={admins} />
 

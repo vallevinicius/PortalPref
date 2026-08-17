@@ -1,12 +1,14 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { recordAuditLog } from '@/lib/audit-log'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+
 import { slugify } from '@/lib/slug'
 
 export async function createSecretaria(nome: string) {
-  await requireSession('super_admin')
+  const session = await requireSession('super_admin')
 
   const trimmed = nome.trim()
   if (!trimmed) {
@@ -14,11 +16,19 @@ export async function createSecretaria(nome: string) {
   }
 
   try {
-    await prisma.secretaria.create({
+    const secretaria = await prisma.secretaria.create({
       data: {
         nome: trimmed,
         slug: slugify(trimmed),
       },
+    })
+
+    await recordAuditLog({
+      actorUserId: session.userId,
+      action: 'secretaria.create',
+      entityType: 'secretaria',
+      entityId: secretaria.id,
+      details: { nome: secretaria.nome },
     })
   } catch (err) {
     if ((err as { code?: string }).code === 'P2002') {

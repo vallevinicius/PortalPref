@@ -3,10 +3,11 @@
 import bcrypt from 'bcryptjs'
 import { UserRole } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
+import { recordAuditLog } from '@/lib/audit-log'
 import { requireSession } from '@/lib/auth'
 import { decryptSecret, encryptSecret } from '@/lib/crypto'
-import { prisma } from '@/lib/prisma'
 import { generateRandomPassword } from '@/lib/password'
+import { prisma } from '@/lib/prisma'
 
 async function verifyOwnPassword(userId: number, confirmPassword: string) {
   const user = await prisma.user.findUnique({
@@ -20,17 +21,17 @@ async function verifyOwnPassword(userId: number, confirmPassword: string) {
 }
 
 async function recordPasswordView(actorUserId: number, targetUserId: number) {
-  await prisma.auditLog.create({
-    data: {
-      actorUserId,
-      action: 'view_password',
-      targetUserId,
-    },
+  await recordAuditLog({
+    actorUserId,
+    action: 'view_password',
+    entityType: 'user',
+    entityId: targetUserId,
+    targetUserId,
   })
 }
 
 export async function createSecretariaUser(username: string, secretariaId: number) {
-  await requireSession('super_admin')
+  const session = await requireSession('super_admin')
 
   const trimmed = username.trim()
   if (!trimmed) {
@@ -41,8 +42,9 @@ export async function createSecretariaUser(username: string, secretariaId: numbe
   const passwordHash = await bcrypt.hash(password, 12)
   const passwordEncrypted = encryptSecret(password)
 
+  let createdUser: { id: number } | undefined
   try {
-    await prisma.user.create({
+    createdUser = await prisma.user.create({
       data: {
         username: trimmed,
         passwordHash,
@@ -58,13 +60,22 @@ export async function createSecretariaUser(username: string, secretariaId: numbe
     throw err
   }
 
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'user.create',
+    entityType: 'user',
+    entityId: createdUser?.id,
+    targetUserId: createdUser?.id,
+    details: { role: UserRole.secretaria_admin, secretariaId },
+  })
+
   revalidatePath('/admin')
 
   return { username: trimmed, password }
 }
 
 export async function resetSecretariaUserPassword(userId: number) {
-  await requireSession('super_admin')
+  const session = await requireSession('super_admin')
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
@@ -85,6 +96,15 @@ export async function resetSecretariaUserPassword(userId: number) {
       passwordHash,
       passwordEncrypted,
     },
+  })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'user.password_reset',
+    entityType: 'user',
+    entityId: userId,
+    targetUserId: userId,
+    details: { role: UserRole.secretaria_admin },
   })
 
   revalidatePath('/admin')
@@ -115,7 +135,7 @@ export async function getSecretariaUserPassword(userId: number, confirmPassword:
 }
 
 export async function createSuperAdmin(username: string) {
-  await requireSession('super_admin')
+  const session = await requireSession('super_admin')
 
   const trimmed = username.trim()
   if (!trimmed) {
@@ -126,8 +146,9 @@ export async function createSuperAdmin(username: string) {
   const passwordHash = await bcrypt.hash(password, 12)
   const passwordEncrypted = encryptSecret(password)
 
+  let createdUser: { id: number } | undefined
   try {
-    await prisma.user.create({
+    createdUser = await prisma.user.create({
       data: {
         username: trimmed,
         passwordHash,
@@ -143,13 +164,22 @@ export async function createSuperAdmin(username: string) {
     throw err
   }
 
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'user.create',
+    entityType: 'user',
+    entityId: createdUser?.id,
+    targetUserId: createdUser?.id,
+    details: { role: UserRole.super_admin, secretariaId: null },
+  })
+
   revalidatePath('/admin')
 
   return { username: trimmed, password }
 }
 
 export async function resetSuperAdminPassword(userId: number) {
-  await requireSession('super_admin')
+  const session = await requireSession('super_admin')
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
@@ -170,6 +200,15 @@ export async function resetSuperAdminPassword(userId: number) {
       passwordHash,
       passwordEncrypted,
     },
+  })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'user.password_reset',
+    entityType: 'user',
+    entityId: userId,
+    targetUserId: userId,
+    details: { role: UserRole.super_admin },
   })
 
   revalidatePath('/admin')

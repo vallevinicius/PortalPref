@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
+import { recordAuditLog } from '@/lib/audit-log'
 import { prisma } from '@/lib/prisma'
 
 function parseDataReferencia(value: string) {
@@ -90,7 +91,7 @@ export async function createIndicador(
   const projeto = await assertProjetoAccess(projetoId, session)
   const validated = validateIndicador(titulo, valor, dataReferencia)
 
-  await prisma.indicador.create({
+  const indicador = await prisma.indicador.create({
     data: {
       projetoId,
       titulo: validated.titulo,
@@ -99,6 +100,14 @@ export async function createIndicador(
       dataReferencia: validated.dataReferencia,
       createdBy: session.userId,
     },
+  })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.create',
+    entityType: 'indicator',
+    entityId: indicador.id,
+    details: { titulo: indicador.titulo, projetoId: indicador.projetoId, secretariaId: projeto.secretariaId },
   })
 
   revalidatePath('/admin')
@@ -127,6 +136,14 @@ export async function updateIndicador(
     },
   })
 
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.update',
+    entityType: 'indicator',
+    entityId: indicadorId,
+    details: { titulo: validated.titulo, secretariaId: indicador.projeto.secretariaId },
+  })
+
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${indicador.projeto.secretariaId}`)
   revalidatePath(`/admin/projetos/${indicadorId}`)
@@ -137,6 +154,14 @@ export async function deleteIndicador(indicadorId: number) {
   const indicador = await assertIndicadorAccess(indicadorId, session)
 
   await prisma.indicador.delete({ where: { id: indicadorId } })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.delete',
+    entityType: 'indicator',
+    entityId: indicadorId,
+    details: { secretariaId: indicador.projeto.secretariaId },
+  })
 
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${indicador.projeto.secretariaId}`)
