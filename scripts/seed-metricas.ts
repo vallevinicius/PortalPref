@@ -3,8 +3,7 @@ import process from 'node:process'
 
 process.loadEnvFile(path.resolve(process.cwd(), '.env'))
 
-import type { RowDataPacket } from 'mysql2'
-import { getPool } from '../lib/db'
+import { prisma } from '../lib/prisma'
 
 const METRICAS_POR_SECRETARIA: Record<string, string[]> = {
   'Secretaria Municipal de Educação, Cultura, Inclusão, Ciência e Tecnologia': [
@@ -134,16 +133,11 @@ const METRICAS_POR_SECRETARIA: Record<string, string[]> = {
   'Secretaria Municipal de Habitação': ['Projetos em andamento'],
 }
 
-interface SecretariaRow extends RowDataPacket {
-  id: number
-  nome: string
-}
-
 async function main() {
-  const pool = getPool()
-
-  const [secretarias] = await pool.query<SecretariaRow[]>('SELECT id, nome FROM secretarias')
-  const idByNome = new Map(secretarias.map((s) => [s.nome, s.id]))
+  const secretarias = await prisma.secretaria.findMany({
+    select: { id: true, nome: true },
+  })
+  const idByNome = new Map(secretarias.map((secretaria) => [secretaria.nome, secretaria.id]))
 
   let created = 0
   let missing = 0
@@ -156,20 +150,21 @@ async function main() {
       continue
     }
 
-    for (const metrica of metricas) {
-      const [result] = await pool.query('INSERT IGNORE INTO projetos (secretaria_id, nome) VALUES (?, ?)', [
-        secretariaId,
-        metrica,
-      ])
-      if ((result as { affectedRows: number }).affectedRows > 0) created += 1
-    }
+    const result = await prisma.projeto.createMany({
+      data: metricas.map((nome) => ({ secretariaId, nome })),
+      skipDuplicates: true,
+    })
+    created += result.count
   }
 
-  console.log(`${created} indicador(es) novo(s) cadastrado(s). ${missing} pulado(s) por secretaria não encontrada.`)
-  await pool.end()
+  console.log(`${created} projeto(s) novo(s) cadastrado(s). ${missing} pulado(s) por secretaria não encontrada.`)
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+main()
+  .catch((err) => {
+    console.error(err)
+    process.exitCode = 1
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })
