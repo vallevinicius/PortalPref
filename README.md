@@ -246,6 +246,7 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 | `Can't reach database server` | Confirme se o MySQL está em execução, se a porta está correta e se `DATABASE_URL` aponta para o host certo. |
 | `Unknown database` | Execute `npm run db:setup` e confirme se o usuário da `DATABASE_URL` tem permissão para criar o banco. |
 | `P1001` ou `P1003` | Revise host, porta, usuário, senha e nome do banco na `DATABASE_URL`. |
+| `P3006`/`P3018` perto de `-- CreateTable` | Atualize para o commit que remove o BOM UTF-8 da migration, confirme que o arquivo começa diretamente com `-- CreateTable` e repita `npx prisma migrate dev` em um banco de desenvolvimento. |
 | Erro de autenticação no site | Confirme os valores usados no seed e execute `npm run db:seed` novamente. |
 | `prisma generate` com cliente desatualizado | Execute `npm run prisma:generate` depois de alterar o schema. |
 | Tabela já existente durante a migration inicial | Pare, faça backup e avalie o procedimento de baseline com `prisma migrate resolve --applied`; não apague tabelas sem confirmação. |
@@ -253,4 +254,4 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 
 ## 15. Estado da implementação
 
-A branch `feat/prisma-migrations-tests` contém seis commits segmentados: infraestrutura, schema/migration, acesso a dados, seeds, testes e documentação operacional. Antes da documentação, a validação concluída foi de **44 testes passando**, TypeScript, lint, build, validação do schema Prisma e status de migrations.
+A branch `feat/prisma-migrations-tests` contém os commits segmentados de infraestrutura, schema/migration, acesso a dados, seeds, testes, documentação operacional e configuração por `DATABASE_URL`. A migration inicial deve começar diretamente com `-- CreateTable`, sem BOM UTF-8. Antes deste ajuste, a validação concluída foi de **44 testes passando**; após a atualização do singleton Prisma, a suíte passou com **43 testes**, além de TypeScript, lint, build e validação do schema Prisma.
