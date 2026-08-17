@@ -329,7 +329,7 @@ export function SuperAdminDashboard({
       <div className="flex justify-start">
         <Link href="/admin/audit-log" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
           <ScrollText className="size-4" />
-          Ver audit log completo
+          Ver registro de auditoria completo
         </Link>
       </div>
 

@@ -48,7 +48,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'indicator.create': 'Indicador criado',
   'indicator.update': 'Indicador atualizado',
   'indicator.delete': 'Indicador excluído',
-  'audit_log.view': 'Audit log consultado',
+  'audit_log.view': 'Registro de auditoria consultado',
   'demo.seed': 'Dados demonstrativos populados',
 }
 
@@ -58,5 +58,95 @@ export const AUDIT_ENTITY_LABELS: Record<AuditEntityType, string> = {
   secretaria: 'Secretaria',
   project: 'Projeto',
   indicator: 'Indicador',
-  audit_log: 'Audit log',
+  audit_log: 'Registro de auditoria',
+}
+
+
+export const AUDIT_ACTION_DESCRIPTIONS: Record<string, string> = {
+  'auth.login': 'A pessoa entrou no sistema.',
+  'auth.logout': 'A pessoa encerrou a sessão.',
+  'user.create': 'Um novo usuário foi cadastrado.',
+  'user.password_reset': 'A senha de um usuário foi redefinida.',
+  view_password: 'Uma senha foi visualizada por um administrador autorizado.',
+  'secretaria.create': 'Uma nova secretaria foi cadastrada.',
+  'project.create': 'Um novo projeto foi criado.',
+  'project.update': 'As informações de um projeto foram alteradas.',
+  'project.delete': 'Um projeto foi excluído.',
+  'indicator.create': 'Um novo indicador foi criado.',
+  'indicator.update': 'As informações de um indicador foram alteradas.',
+  'indicator.delete': 'Um indicador foi excluído.',
+  'audit_log.view': 'O histórico de atividades foi consultado.',
+  'demo.seed': 'Dados demonstrativos foram inseridos no sistema.',
+}
+
+const AUDIT_DETAIL_LABELS: Record<string, string> = {
+  username: 'Usuário',
+  role: 'Perfil de acesso',
+  nome: 'Nome',
+  descricao: 'Descrição',
+  titulo: 'Título',
+  valor: 'Valor',
+  unidade: 'Unidade',
+  dataReferencia: 'Data de referência',
+  secretariaId: 'Secretaria relacionada',
+  projetoId: 'Projeto relacionado',
+  indicadorId: 'Indicador relacionado',
+  targetUserId: 'Usuário afetado',
+  page: 'Página consultada',
+  pageSize: 'Itens por página',
+  action: 'Filtro por ação',
+  entityType: 'Filtro por tipo de registro',
+  actorUserId: 'Filtro por usuário',
+  secretarias: 'Secretarias inseridas',
+  users: 'Usuários inseridos',
+  projetos: 'Projetos inseridos',
+  indicadores: 'Indicadores inseridos',
+}
+
+const INTERNAL_DETAIL_KEYS = new Set(['seedKey'])
+
+function humanizeDetailKey(key: string) {
+  return key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, (value) => value.toUpperCase())
+}
+
+function roleLabel(value: unknown) {
+  if (value === 'super_admin') return 'Administrador supremo'
+  if (value === 'secretaria_admin') return 'Administrador de secretaria'
+  return String(value)
+}
+
+function formatDetailValue(key: string, value: unknown) {
+  if (value === null || value === undefined || value === '') return 'Não informado'
+  if (key === 'role') return roleLabel(value)
+  if (key === 'entityType' && typeof value === 'string' && value in AUDIT_ENTITY_LABELS) {
+    return AUDIT_ENTITY_LABELS[value as AuditEntityType]
+  }
+  if (key === 'action' && typeof value === 'string') {
+    return AUDIT_ACTION_LABELS[value] ?? value
+  }
+  if (key === 'pageSize' && typeof value === 'number') return `${value} itens`
+  if (['secretariaId', 'projetoId', 'indicadorId', 'targetUserId', 'actorUserId'].includes(key) && typeof value === 'number') {
+    return `ID ${value}`
+  }
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+export type AuditDetailEntry = {
+  label: string
+  value: string
+}
+
+export function getAuditDetailEntries(details: unknown): AuditDetailEntry[] {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return []
+
+  return Object.entries(details as Record<string, unknown>)
+    .filter(([key]) => !INTERNAL_DETAIL_KEYS.has(key))
+    .map(([key, value]) => ({
+      label: AUDIT_DETAIL_LABELS[key] ?? humanizeDetailKey(key),
+      value: formatDetailValue(key, value),
+    }))
 }

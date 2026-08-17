@@ -14,10 +14,10 @@ const { prismaMock, requireSessionMock } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/auth', () => ({ requireSession: requireSessionMock }))
 
-import { recordAuditLog } from '@/lib/audit-log'
+import { getAuditDetailEntries, recordAuditLog } from '@/lib/audit-log'
 import { getAuditLogs } from '@/lib/actions/audit-log'
 
-describe('helper de audit log', () => {
+describe('helper do registro de auditoria', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     prismaMock.auditLog.create.mockResolvedValue({ id: 1 })
@@ -62,9 +62,24 @@ describe('helper de audit log', () => {
       },
     })
   })
+
+  it('converte detalhes técnicos em informações legíveis e omite campos internos', () => {
+    expect(getAuditDetailEntries({
+      nome: 'Projeto Saúde',
+      secretariaId: 4,
+      role: 'super_admin',
+      pageSize: 25,
+      seedKey: 'audit-log-demo-v1',
+    })).toEqual([
+      { label: 'Nome', value: 'Projeto Saúde' },
+      { label: 'Secretaria relacionada', value: 'ID 4' },
+      { label: 'Perfil de acesso', value: 'Administrador supremo' },
+      { label: 'Itens por página', value: '25 itens' },
+    ])
+  })
 })
 
-describe('consulta protegida do audit log', () => {
+describe('consulta protegida do registro de auditoria', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireSessionMock.mockResolvedValue({ userId: 1, username: 'root', role: 'super_admin', secretariaId: null })

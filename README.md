@@ -177,13 +177,13 @@ A aplicação possui as principais rotas abaixo:
 | `/api/auth/logout` | Encerramento da sessão |
 | `/admin/audit-log` | Histórico completo, filtros e paginação; disponível somente para `super_admin` |
 
-## 9. Audit log e controle de acesso
+## 9. Registro de auditoria e controle de acesso
 
 O sistema registra eventos de autenticação, criação e alteração de secretarias, usuários, projetos e indicadores, redefinição e visualização de credenciais, além da própria consulta do histórico. Cada evento contém o ator, a ação, a entidade, o identificador relacionado, o alvo de usuário quando aplicável, detalhes estruturados e data/hora.
 
-A leitura do audit log é protegida em dois níveis: a página server-side redireciona usuários não autenticados ou que não sejam `super_admin`, e a função de consulta exige novamente `requireSession('super_admin')`. Portanto, administradores de secretaria não conseguem obter os eventos nem acessando a rota diretamente.
+A leitura do registro de auditoria é protegida em dois níveis: a página server-side redireciona usuários não autenticados ou que não sejam `super_admin`, e a função de consulta exige novamente `requireSession('super_admin')`. Portanto, administradores de secretaria não conseguem obter os eventos nem acessando a rota diretamente.
 
-O super administrador acessa o histórico pelo botão **Ver audit log completo** no dashboard ou diretamente em `/admin/audit-log`. A tela permite filtrar por ação, tipo de entidade e ator, além de navegar por páginas. Senhas e outros segredos nunca são armazenados nos detalhes dos eventos.
+O super administrador acessa o histórico pelo botão **Ver registro de auditoria completo** no dashboard ou diretamente em `/admin/audit-log`. A tela permite filtrar por ação, tipo de entidade e ator, além de navegar por páginas. A coluna **Resumo e informações** apresenta uma explicação em linguagem simples e traduz os campos técnicos, como secretaria relacionada, perfil de acesso e página consultada. Senhas e outros segredos nunca são armazenados nos detalhes dos eventos.
 
 ## 10. Executar os testes unitários
 
@@ -205,7 +205,7 @@ Para gerar cobertura, caso o provider de cobertura esteja instalado no ambiente:
 npm run test:coverage
 ```
 
-A suíte criada para esta implementação cobre as ações de secretarias, projetos, indicadores e usuários, a camada de leitura agregada, o login, o logout, o helper de auditoria, a consulta protegida do audit log e o singleton de configuração do Prisma. Os testes utilizam mocks do Prisma e não dependem de um banco real.
+A suíte criada para esta implementação cobre as ações de secretarias, projetos, indicadores e usuários, a camada de leitura agregada, o login, o logout, o helper de auditoria, a consulta protegida do registro de auditoria e o singleton de configuração do Prisma. Os testes utilizam mocks do Prisma e não dependem de um banco real.
 
 ## 11. Executar lint, TypeScript e build
 
@@ -269,4 +269,4 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 
 ## 16. Estado da implementação
 
-A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reforça que o comando padrão `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. A implementação do audit log permanece disponível, e o cenário demonstrativo continua opt-in pelo comando separado `npm run db:seed-demo`. A validação anterior da feature alcançou **59 testes passando**, além de TypeScript, lint e build.
+A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reúne a correção do seed padrão com a interface amigável do registro de auditoria. O comando `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. O cenário demonstrativo continua opt-in pelo comando separado `npm run db:seed-demo`. A validação da branch alcançou **62 testes passando**, além de TypeScript, lint e build.

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, AUDIT_ENTITY_TYPES, type AuditEntityType } from '@/lib/audit-log'
+import { AUDIT_ACTION_DESCRIPTIONS, AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, AUDIT_ENTITY_TYPES, getAuditDetailEntries, type AuditEntityType } from '@/lib/audit-log'
 import { getSession } from '@/lib/auth'
 import { getAuditLogs, type AuditLogEntry } from '@/lib/actions/audit-log'
 import { getSecretariaAdmins, getSuperAdmins } from '@/lib/data'
@@ -28,13 +28,30 @@ function formatDateTime(value: string) {
   }).format(new Date(value))
 }
 
-function formatDetails(details: unknown) {
-  if (details === null || details === undefined) return '—'
-  return JSON.stringify(details)
+function roleLabel(role: string) {
+  return role === 'super_admin' ? 'Administrador supremo' : 'Administrador de secretaria'
 }
 
-function roleLabel(role: string) {
-  return role === 'super_admin' ? 'Admin supremo' : 'Admin de secretaria'
+function DetailsCell({ entry }: { entry: AuditLogEntry }) {
+  const details = getAuditDetailEntries(entry.details)
+
+  return (
+    <div className="min-w-[260px] space-y-2">
+      <p className="font-medium text-foreground">{AUDIT_ACTION_DESCRIPTIONS[entry.action] ?? 'Uma atividade foi registrada no sistema.'}</p>
+      {details.length > 0 ? (
+        <dl className="grid gap-1.5 text-xs">
+          {details.map((detail) => (
+            <div key={`${detail.label}-${detail.value}`} className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-3 rounded-md bg-muted/40 px-2.5 py-1.5">
+              <dt className="font-medium text-muted-foreground">{detail.label}</dt>
+              <dd className="break-words text-foreground">{detail.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="text-xs text-muted-foreground">Nenhuma informação adicional foi registrada.</p>
+      )}
+    </div>
+  )
 }
 
 function AuditRow({ entry }: { entry: AuditLogEntry }) {
@@ -43,14 +60,15 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
       <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</td>
       <td className="px-4 py-3">
         <div className="font-medium">{entry.actionLabel}</div>
-        <div className="mt-1 font-mono text-[11px] text-muted-foreground">{entry.action}</div>
+        <div className="mt-1 text-xs text-muted-foreground">{AUDIT_ACTION_DESCRIPTIONS[entry.action] ?? 'Atividade registrada no sistema.'}</div>
       </td>
       <td className="px-4 py-3">
         <Badge variant="outline">{entry.entityLabel}</Badge>
-        {entry.entityId !== null && <div className="mt-1 text-xs text-muted-foreground">ID {entry.entityId}</div>}
+        {entry.entityId !== null && <div className="mt-1 text-xs text-muted-foreground">Identificador: {entry.entityId}</div>}
       </td>
       <td className="px-4 py-3">
         <div className="font-medium">{entry.actor.username}</div>
+        <div className="text-xs text-muted-foreground">Ação realizada por</div>
         <div className="text-xs text-muted-foreground">{roleLabel(entry.actor.role)}</div>
       </td>
       <td className="px-4 py-3">
@@ -60,11 +78,11 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
             <div className="text-xs text-muted-foreground">{roleLabel(entry.target.role)}</div>
           </>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">Não se aplica</span>
         )}
       </td>
       <td className="max-w-sm px-4 py-3">
-        <code className="break-words text-[11px] leading-relaxed text-muted-foreground">{formatDetails(entry.details)}</code>
+        <DetailsCell entry={entry} />
       </td>
     </tr>
   )
@@ -121,8 +139,8 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
 
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Audit log</h2>
-          <p className="text-sm text-muted-foreground">Todas as ações registradas no Portal de Dados Integrados, inclusive as ações dos administradores supremos.</p>
+          <h2 className="text-lg font-semibold">Registro de auditoria</h2>
+          <p className="text-sm text-muted-foreground">Consulte, de forma simples, todas as atividades realizadas no Portal de Dados Integrados, inclusive as ações dos administradores supremos.</p>
         </div>
         <Link href="/admin" className={buttonVariants({ variant: 'outline' })}>Voltar ao painel</Link>
       </div>
@@ -139,22 +157,22 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
               {ACTION_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <select name="entityType" defaultValue={entityType ?? ''} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
-              <option value="">Todas as entidades</option>
+              <option value="">Todos os tipos de registro</option>
               {AUDIT_ENTITY_TYPES.map((value) => <option key={value} value={value}>{AUDIT_ENTITY_LABELS[value]}</option>)}
             </select>
             <select name="actor" defaultValue={actor ?? ''} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
-              <option value="">Todos os usuários</option>
+              <option value="">Todas as pessoas responsáveis</option>
               {actors.map((user) => <option key={user.id} value={user.id}>{user.username} — {roleLabel(user.role)}</option>)}
             </select>
-            <Button type="submit">Filtrar</Button>
+            <Button type="submit">Aplicar filtros</Button>
           </form>
         </CardContent>
       </Card>
 
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>{auditLog.total} evento(s) registrado(s)</CardTitle>
-          <CardDescription>Os eventos mais recentes aparecem primeiro. Dados sensíveis, como senhas, nunca são armazenados no histórico.</CardDescription>
+          <CardTitle>{auditLog.total} atividade(s) registrada(s)</CardTitle>
+          <CardDescription>As atividades mais recentes aparecem primeiro. Dados sensíveis, como senhas, nunca são armazenados no registro.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {auditLog.entries.length === 0 ? (
@@ -165,11 +183,11 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
                 <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium">Data</th>
-                    <th className="px-4 py-3 font-medium">Ação</th>
-                    <th className="px-4 py-3 font-medium">Entidade</th>
-                    <th className="px-4 py-3 font-medium">Ator</th>
-                    <th className="px-4 py-3 font-medium">Alvo</th>
-                    <th className="px-4 py-3 font-medium">Detalhes</th>
+                    <th className="px-4 py-3 font-medium">Ação realizada</th>
+                    <th className="px-4 py-3 font-medium">Tipo de registro</th>
+                    <th className="px-4 py-3 font-medium">Responsável</th>
+                    <th className="px-4 py-3 font-medium">Usuário afetado</th>
+                    <th className="px-4 py-3 font-medium">Resumo e informações</th>
                   </tr>
                 </thead>
                 <tbody>
