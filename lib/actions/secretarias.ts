@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireSession } from '@/lib/auth'
-import { getPool } from '@/lib/db'
+import { prisma } from '@/lib/prisma'
 import { slugify } from '@/lib/slug'
 
 export async function createSecretaria(nome: string) {
@@ -13,11 +13,15 @@ export async function createSecretaria(nome: string) {
     throw new Error('Informe o nome da secretaria.')
   }
 
-  const pool = getPool()
   try {
-    await pool.query('INSERT INTO secretarias (nome, slug) VALUES (?, ?)', [trimmed, slugify(trimmed)])
+    await prisma.secretaria.create({
+      data: {
+        nome: trimmed,
+        slug: slugify(trimmed),
+      },
+    })
   } catch (err) {
-    if ((err as { code?: string }).code === 'ER_DUP_ENTRY') {
+    if ((err as { code?: string }).code === 'P2002') {
       throw new Error('Já existe uma secretaria com esse nome.')
     }
     throw err

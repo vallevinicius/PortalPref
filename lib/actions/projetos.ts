@@ -1,22 +1,19 @@
 'use server'
 
-import type { RowDataPacket } from 'mysql2'
 import { revalidatePath } from 'next/cache'
 import { requireSession, UnauthorizedError } from '@/lib/auth'
-import { getPool } from '@/lib/db'
-
-interface ProjetoRow extends RowDataPacket {
-  id: number
-  secretaria_id: number
-}
+import { prisma } from '@/lib/prisma'
 
 async function getOwnedProjeto(projetoId: number, secretariaId: number) {
-  const pool = getPool()
-  const [rows] = await pool.query<ProjetoRow[]>('SELECT id, secretaria_id FROM projetos WHERE id = ? LIMIT 1', [projetoId])
-  const projeto = rows[0]
-  if (!projeto || projeto.secretaria_id !== secretariaId) {
+  const projeto = await prisma.projeto.findUnique({
+    where: { id: projetoId },
+    select: { id: true, secretariaId: true },
+  })
+
+  if (!projeto || projeto.secretariaId !== secretariaId) {
     throw new UnauthorizedError('Este projeto não pertence à sua secretaria.')
   }
+
   return projeto
 }
 
@@ -31,13 +28,14 @@ export async function createProjeto(nome: string, descricao: string) {
     throw new Error('Informe o nome do projeto.')
   }
 
-  const pool = getPool()
-  await pool.query('INSERT INTO projetos (secretaria_id, nome, descricao, created_by) VALUES (?, ?, ?, ?)', [
-    session.secretariaId,
-    trimmed,
-    descricao.trim() || null,
-    session.userId,
-  ])
+  await prisma.projeto.create({
+    data: {
+      secretariaId: session.secretariaId,
+      nome: trimmed,
+      descricao: descricao.trim() || null,
+      createdBy: session.userId,
+    },
+  })
 
   revalidatePath('/admin')
 }
@@ -54,8 +52,13 @@ export async function updateProjeto(projetoId: number, nome: string, descricao: 
     throw new Error('Informe o nome do projeto.')
   }
 
-  const pool = getPool()
-  await pool.query('UPDATE projetos SET nome = ?, descricao = ? WHERE id = ?', [trimmed, descricao.trim() || null, projetoId])
+  await prisma.projeto.update({
+    where: { id: projetoId },
+    data: {
+      nome: trimmed,
+      descricao: descricao.trim() || null,
+    },
+  })
 
   revalidatePath('/admin')
 }
@@ -67,8 +70,7 @@ export async function deleteProjeto(projetoId: number) {
   }
   await getOwnedProjeto(projetoId, session.secretariaId)
 
-  const pool = getPool()
-  await pool.query('DELETE FROM projetos WHERE id = ?', [projetoId])
+  await prisma.projeto.delete({ where: { id: projetoId } })
 
   revalidatePath('/admin')
 }

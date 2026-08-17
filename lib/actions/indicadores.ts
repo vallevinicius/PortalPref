@@ -1,37 +1,53 @@
 'use server'
 
-import type { RowDataPacket } from 'mysql2'
 import { revalidatePath } from 'next/cache'
 import { requireSession, UnauthorizedError } from '@/lib/auth'
-import { getPool } from '@/lib/db'
+import { prisma } from '@/lib/prisma'
 
-interface OwnershipRow extends RowDataPacket {
-  id: number
-  secretaria_id: number
+function parseDataReferencia(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error('Preencha título, valor e data do indicador.')
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`)
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new Error('Preencha título, valor e data do indicador.')
+  }
+
+  return date
 }
 
 async function assertOwnsProjeto(projetoId: number, secretariaId: number) {
-  const pool = getPool()
-  const [rows] = await pool.query<OwnershipRow[]>('SELECT id, secretaria_id FROM projetos WHERE id = ? LIMIT 1', [projetoId])
-  const projeto = rows[0]
-  if (!projeto || projeto.secretaria_id !== secretariaId) {
+  const projeto = await prisma.projeto.findUnique({
+    where: { id: projetoId },
+    select: { id: true, secretariaId: true },
+  })
+
+  if (!projeto || projeto.secretariaId !== secretariaId) {
     throw new UnauthorizedError('Este projeto não pertence à sua secretaria.')
   }
 }
 
 async function assertOwnsIndicador(indicadorId: number, secretariaId: number) {
-  const pool = getPool()
-  const [rows] = await pool.query<OwnershipRow[]>(
-    `SELECT indicadores.id AS id, projetos.secretaria_id AS secretaria_id
-     FROM indicadores
-     JOIN projetos ON projetos.id = indicadores.projeto_id
-     WHERE indicadores.id = ?
-     LIMIT 1`,
-    [indicadorId],
-  )
-  const indicador = rows[0]
-  if (!indicador || indicador.secretaria_id !== secretariaId) {
+  const indicador = await prisma.indicador.findUnique({
+    where: { id: indicadorId },
+    select: { id: true, projeto: { select: { secretariaId: true } } },
+  })
+
+  if (!indicador || indicador.projeto.secretariaId !== secretariaId) {
     throw new UnauthorizedError('Este indicador não pertence à sua secretaria.')
+  }
+}
+
+function validateIndicador(titulo: string, valor: number, dataReferencia: string) {
+  const trimmedTitulo = titulo.trim()
+  if (!trimmedTitulo || !Number.isFinite(valor) || !dataReferencia) {
+    throw new Error('Preencha título, valor e data do indicador.')
+  }
+
+  return {
+    titulo: trimmedTitulo,
+    dataReferencia: parseDataReferencia(dataReferencia),
   }
 }
 
@@ -48,16 +64,18 @@ export async function createIndicador(
   }
   await assertOwnsProjeto(projetoId, session.secretariaId)
 
-  const trimmedTitulo = titulo.trim()
-  if (!trimmedTitulo || Number.isNaN(valor) || !dataReferencia) {
-    throw new Error('Preencha título, valor e data do indicador.')
-  }
+  const validated = validateIndicador(titulo, valor, dataReferencia)
 
-  const pool = getPool()
-  await pool.query(
-    'INSERT INTO indicadores (projeto_id, titulo, valor, unidade, data_referencia, created_by) VALUES (?, ?, ?, ?, ?, ?)',
-    [projetoId, trimmedTitulo, valor, unidade.trim() || null, dataReferencia, session.userId],
-  )
+  await prisma.indicador.create({
+    data: {
+      projetoId,
+      titulo: validated.titulo,
+      valor,
+      unidade: unidade.trim() || null,
+      dataReferencia: validated.dataReferencia,
+      createdBy: session.userId,
+    },
+  })
 
   revalidatePath('/admin')
 }
@@ -75,19 +93,17 @@ export async function updateIndicador(
   }
   await assertOwnsIndicador(indicadorId, session.secretariaId)
 
-  const trimmedTitulo = titulo.trim()
-  if (!trimmedTitulo || Number.isNaN(valor) || !dataReferencia) {
-    throw new Error('Preencha título, valor e data do indicador.')
-  }
+  const validated = validateIndicador(titulo, valor, dataReferencia)
 
-  const pool = getPool()
-  await pool.query('UPDATE indicadores SET titulo = ?, valor = ?, unidade = ?, data_referencia = ? WHERE id = ?', [
-    trimmedTitulo,
-    valor,
-    unidade.trim() || null,
-    dataReferencia,
-    indicadorId,
-  ])
+  await prisma.indicador.update({
+    where: { id: indicadorId },
+    data: {
+      titulo: validated.titulo,
+      valor,
+      unidade: unidade.trim() || null,
+      dataReferencia: validated.dataReferencia,
+    },
+  })
 
   revalidatePath('/admin')
 }
@@ -99,8 +115,7 @@ export async function deleteIndicador(indicadorId: number) {
   }
   await assertOwnsIndicador(indicadorId, session.secretariaId)
 
-  const pool = getPool()
-  await pool.query('DELETE FROM indicadores WHERE id = ?', [indicadorId])
+  await prisma.indicador.delete({ where: { id: indicadorId } })
 
   revalidatePath('/admin')
 }
