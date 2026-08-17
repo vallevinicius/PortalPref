@@ -61,6 +61,8 @@ export const AUDIT_ENTITY_LABELS: Record<AuditEntityType, string> = {
   audit_log: 'Registro de auditoria',
 }
 
+export const AUDIT_IGNORED_ACTIONS = ['auth.login', 'auth.logout', 'audit_log.view', 'demo.seed'] as const
+
 
 export const AUDIT_ACTION_DESCRIPTIONS: Record<string, string> = {
   'auth.login': 'A pessoa entrou no sistema.',

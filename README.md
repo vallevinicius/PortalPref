@@ -179,11 +179,11 @@ A aplicação possui as principais rotas abaixo:
 
 ## 9. Registro de auditoria e controle de acesso
 
-O sistema registra eventos de autenticação, criação e alteração de secretarias, usuários, projetos e indicadores, redefinição e visualização de credenciais, além da própria consulta do histórico. Cada evento contém o ator, a ação, a entidade, o identificador relacionado, o alvo de usuário quando aplicável, detalhes estruturados e data/hora.
+O sistema registra somente eventos relevantes de gestão e segurança: criação de secretarias e usuários, criação, alteração e exclusão de projetos e indicadores, além de redefinição e visualização de credenciais. Login, logout, abertura da página e filtros de consulta não geram novos registros. Cada evento contém o responsável, a ação, a entidade, o identificador relacionado, o usuário afetado quando aplicável, detalhes estruturados e data/hora.
 
 A leitura do registro de auditoria é protegida em dois níveis: a página server-side redireciona usuários não autenticados ou que não sejam `super_admin`, e a função de consulta exige novamente `requireSession('super_admin')`. Portanto, administradores de secretaria não conseguem obter os eventos nem acessando a rota diretamente.
 
-O super administrador acessa o histórico pelo botão **Ver registro de auditoria completo** no dashboard ou diretamente em `/admin/audit-log`. A tela permite filtrar por ação, tipo de entidade e ator, além de navegar por páginas. A coluna **Resumo e informações** apresenta uma explicação em linguagem simples e traduz os campos técnicos, como secretaria relacionada, perfil de acesso e página consultada. Senhas e outros segredos nunca são armazenados nos detalhes dos eventos.
+O super administrador acessa o histórico pelo botão **Ver registro de auditoria completo** no dashboard ou diretamente em `/admin/audit-log`. A tela permite filtrar por ação, tipo de entidade e ator, além de navegar por páginas. A coluna **Resumo e informações** apresenta uma explicação em linguagem simples e traduz os campos técnicos, como secretaria relacionada e perfil de acesso. Senhas e outros segredos nunca são armazenados nos detalhes dos eventos. Registros antigos de login, logout, consulta e seed permanecem preservados no banco, mas são ignorados na listagem operacional.
 
 ## 10. Executar os testes unitários
 
@@ -269,4 +269,4 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 
 ## 16. Estado da implementação
 
-A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reúne a correção do seed padrão com a interface amigável do registro de auditoria. O comando `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. O cenário demonstrativo continua opt-in pelo comando separado `npm run db:seed-demo`. A validação da branch alcançou **62 testes passando**, além de TypeScript, lint e build.
+A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reúne a correção do seed padrão com a interface amigável do registro de auditoria. O comando `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. O cenário demonstrativo continua opt-in pelo comando separado `npm run db:seed-demo`. A validação da branch alcançou **61 testes passando**, além de TypeScript, lint e build.

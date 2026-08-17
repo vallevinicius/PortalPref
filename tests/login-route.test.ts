@@ -1,18 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { bcryptMock, prismaMock, recordAuditLogMock, createSessionTokenMock, setSessionCookieMock } = vi.hoisted(() => ({
+const { bcryptMock, prismaMock, createSessionTokenMock, setSessionCookieMock } = vi.hoisted(() => ({
   bcryptMock: { compare: vi.fn() },
     prismaMock: {
     user: { findUnique: vi.fn() },
   },
-  recordAuditLogMock: vi.fn(),
   createSessionTokenMock: vi.fn(),
   setSessionCookieMock: vi.fn(),
 }))
 
 vi.mock('bcryptjs', () => ({ default: bcryptMock }))
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
-vi.mock('@/lib/audit-log', () => ({ recordAuditLog: recordAuditLogMock }))
 vi.mock('@/lib/auth', () => ({
   createSessionToken: createSessionTokenMock,
   setSessionCookie: setSessionCookieMock,
@@ -92,12 +90,5 @@ describe('POST /api/auth/login', () => {
       secretariaId: 10,
     })
     expect(setSessionCookieMock).toHaveBeenCalledWith('token-gerado')
-    expect(recordAuditLogMock).toHaveBeenCalledWith({
-      actorUserId: 7,
-      action: 'auth.login',
-      entityType: 'auth',
-      entityId: 7,
-      details: { username: 'saude-admin', role: 'secretaria_admin' },
-    })
   })
 })

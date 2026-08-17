@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
-import { recordAuditLog } from '@/lib/audit-log'
 import { createSessionToken, setSessionCookie } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -33,14 +32,6 @@ export async function POST(request: Request) {
     secretariaId: user.secretariaId,
   })
   await setSessionCookie(token)
-
-  await recordAuditLog({
-    actorUserId: user.id,
-    action: 'auth.login',
-    entityType: 'auth',
-    entityId: user.id,
-    details: { username: user.username, role: user.role },
-  })
 
   return NextResponse.json({ ok: true, role: user.role })
 }

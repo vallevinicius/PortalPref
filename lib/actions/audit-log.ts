@@ -1,7 +1,7 @@
 'use server'
 
 import type { Prisma } from '@prisma/client'
-import { recordAuditLog, AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, type AuditEntityType } from '@/lib/audit-log'
+import { AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, AUDIT_IGNORED_ACTIONS, type AuditEntityType } from '@/lib/audit-log'
 import { requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
@@ -53,22 +53,16 @@ function normalizeEntityType(value: string | undefined): AuditEntityType | undef
 }
 
 export async function getAuditLogs(query: AuditLogQuery = {}): Promise<AuditLogPage> {
-  const session = await requireSession('super_admin')
+  await requireSession('super_admin')
   const pageSize = normalizePage(query.pageSize, 25, 100)
   const page = normalizePage(query.page, 1, Number.MAX_SAFE_INTEGER)
   const action = query.action?.trim() || undefined
   const entityType = normalizeEntityType(query.entityType)
   const actorUserId = query.actorUserId && query.actorUserId > 0 ? query.actorUserId : undefined
 
-  await recordAuditLog({
-    actorUserId: session.userId,
-    action: 'audit_log.view',
-    entityType: 'audit_log',
-    details: { page, pageSize, action: action ?? null, entityType: entityType ?? null, actorUserId: actorUserId ?? null },
-  })
-
   const where: Prisma.AuditLogWhereInput = {
-    ...(action ? { action } : {}),
+    action: { notIn: [...AUDIT_IGNORED_ACTIONS] },
+    ...(action ? { AND: [{ action }] } : {}),
     ...(entityType ? { entityType } : {}),
     ...(actorUserId ? { actorUserId } : {}),
   }

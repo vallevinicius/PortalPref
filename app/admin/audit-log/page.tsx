@@ -3,13 +3,14 @@ import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { AUDIT_ACTION_DESCRIPTIONS, AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, AUDIT_ENTITY_TYPES, getAuditDetailEntries, type AuditEntityType } from '@/lib/audit-log'
+import { AUDIT_ACTION_DESCRIPTIONS, AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, AUDIT_ENTITY_TYPES, AUDIT_IGNORED_ACTIONS, getAuditDetailEntries, type AuditEntityType } from '@/lib/audit-log'
 import { getSession } from '@/lib/auth'
 import { getAuditLogs, type AuditLogEntry } from '@/lib/actions/audit-log'
 import { getSecretariaAdmins, getSuperAdmins } from '@/lib/data'
 import { AdminHeader } from '../admin-header'
 
-const ACTION_OPTIONS = Object.entries(AUDIT_ACTION_LABELS)
+const ACTION_OPTIONS = Object.entries(AUDIT_ACTION_LABELS).filter(([action]) => !(AUDIT_IGNORED_ACTIONS as readonly string[]).includes(action))
+const ENTITY_OPTIONS = AUDIT_ENTITY_TYPES.filter((entityType) => entityType !== 'auth' && entityType !== 'audit_log')
 
 function parsePositiveInt(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value
@@ -158,7 +159,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
             </select>
             <select name="entityType" defaultValue={entityType ?? ''} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
               <option value="">Todos os tipos de registro</option>
-              {AUDIT_ENTITY_TYPES.map((value) => <option key={value} value={value}>{AUDIT_ENTITY_LABELS[value]}</option>)}
+              {ENTITY_OPTIONS.map((value) => <option key={value} value={value}>{AUDIT_ENTITY_LABELS[value]}</option>)}
             </select>
             <select name="actor" defaultValue={actor ?? ''} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
               <option value="">Todas as pessoas responsáveis</option>

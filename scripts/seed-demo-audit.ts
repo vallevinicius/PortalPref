@@ -68,7 +68,7 @@ async function main() {
     throw new Error('Execute npm run db:seed antes do seed demonstrativo para criar o admin supremo.')
   }
 
-  const previousSeed = await prisma.auditLog.findFirst({ where: { action: 'demo.seed' }, select: { id: true } })
+  const previousSeed = await prisma.user.findUnique({ where: { username: 'demo-1' }, select: { id: true } })
   if (previousSeed) {
     console.log('O seed demonstrativo já foi executado. Nenhuma alteração foi feita.')
     return
@@ -149,28 +149,7 @@ async function main() {
       }
     }
 
-    await recordAuditLog({
-      actorUserId: demoUser.id,
-      action: 'auth.login',
-      entityType: 'auth',
-      entityId: demoUser.id,
-      details: { username: demoUser.username, role: UserRole.secretaria_admin, seedKey: SEED_KEY },
-    })
-    await recordAuditLog({
-      actorUserId: demoUser.id,
-      action: 'auth.logout',
-      entityType: 'auth',
-      entityId: demoUser.id,
-      details: { username: demoUser.username, role: UserRole.secretaria_admin, seedKey: SEED_KEY },
-    })
   }
-
-  await recordAuditLog({
-    actorUserId: admin.id,
-    action: 'demo.seed',
-    entityType: 'audit_log',
-    details: { seedKey: SEED_KEY, secretarias: secretariasCount, users: usersCount, projetos: projetosCount, indicadores: indicadoresCount },
-  })
 
   console.log(`Seed demonstrativo concluído: ${secretariasCount} secretarias, ${usersCount} usuários, ${projetosCount} projetos, ${indicadoresCount} indicadores e eventos de auditoria criados.`)
   console.log(`Usuários demo: demo-1 até demo-${DEMO_SECRETARIAS.length} | senha: ${DEMO_PASSWORD}`)

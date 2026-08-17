@@ -99,22 +99,18 @@ describe('consulta protegida do registro de auditoria', () => {
     prismaMock.auditLog.count.mockResolvedValue(51)
   })
 
-  it('permite somente super admin e registra a própria consulta', async () => {
+  it('permite somente super admin sem registrar a própria consulta', async () => {
     const result = await getAuditLogs({ page: 2, pageSize: 10, action: 'project.create', entityType: 'project', actorUserId: 1 })
 
     expect(requireSessionMock).toHaveBeenCalledWith('super_admin')
-    expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
-      data: {
-        actorUserId: 1,
-        action: 'audit_log.view',
-        entityType: 'audit_log',
-        entityId: null,
-        targetUserId: null,
-        details: { page: 2, pageSize: 10, action: 'project.create', entityType: 'project', actorUserId: 1 },
-      },
-    })
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled()
     expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith({
-      where: { action: 'project.create', entityType: 'project', actorUserId: 1 },
+      where: {
+        action: { notIn: ['auth.login', 'auth.logout', 'audit_log.view', 'demo.seed'] },
+        AND: [{ action: 'project.create' }],
+        entityType: 'project',
+        actorUserId: 1,
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: 10,
       take: 10,
@@ -153,7 +149,7 @@ describe('consulta protegida do registro de auditoria', () => {
     await getAuditLogs({ page: 0, pageSize: 500, entityType: 'invalid' as never, actorUserId: -2 })
 
     expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {},
+      where: { action: { notIn: ['auth.login', 'auth.logout', 'audit_log.view', 'demo.seed'] } },
       skip: 0,
       take: 100,
     }))
