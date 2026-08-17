@@ -81,13 +81,18 @@ model Indicador {
 model AuditLog {
   id           Int      @id @default(autoincrement())
   actorUserId  Int      @map("actor_user_id")
-  action       String   @db.VarChar(50)
-  targetUserId Int      @map("target_user_id")
+  action       String   @db.VarChar(80)
+  entityType   String   @default("user") @map("entity_type") @db.VarChar(40)
+  entityId     Int?     @map("entity_id")
+  targetUserId Int?     @map("target_user_id")
+  details      Json?
   createdAt    DateTime @default(now()) @map("created_at")
   actor        User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Cascade)
-  target       User     @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  target       User?    @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId])
   @@index([targetUserId])
+  @@index([entityType, action])
+  @@index([createdAt])
   @@map("audit_log")
 }
