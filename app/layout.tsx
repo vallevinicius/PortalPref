@@ -7,6 +7,13 @@ export const metadata: Metadata = {
   title: 'Portal de Dados Integrados | Prefeitura de Saquarema',
   description: 'Acesso institucional restrito ao Portal de Dados Integrados da Prefeitura Municipal de Saquarema.',
   generator: 'v0.app',
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    nosnippet: true,
+    noimageindex: true,
+  },
   icons: {
     icon: '/favicon.ico',
   },
