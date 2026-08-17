@@ -1,5 +1,5 @@
-import type { RowDataPacket } from 'mysql2'
-import { getPool } from '@/lib/db'
+import { UserRole } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 
 export interface Secretaria {
   id: number
@@ -37,140 +37,176 @@ export interface Projeto {
   indicadores: Indicador[]
 }
 
+function formatDate(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function mapIndicador(indicador: {
+  id: number
+  titulo: string
+  valor: unknown
+  unidade: string | null
+  dataReferencia: Date
+}): Indicador {
+  return {
+    id: indicador.id,
+    titulo: indicador.titulo,
+    valor: Number(indicador.valor),
+    unidade: indicador.unidade,
+    data_referencia: formatDate(indicador.dataReferencia),
+  }
+}
+
+function mapProjeto(projeto: {
+  id: number
+  nome: string
+  descricao: string | null
+  secretariaId: number
+  secretaria: { id: number; nome: string }
+  indicadores: Array<{
+    id: number
+    titulo: string
+    valor: unknown
+    unidade: string | null
+    dataReferencia: Date
+  }>
+}): Projeto {
+  return {
+    id: projeto.id,
+    nome: projeto.nome,
+    descricao: projeto.descricao,
+    secretaria_id: projeto.secretariaId,
+    secretaria_nome: projeto.secretaria.nome,
+    indicadores: projeto.indicadores.map(mapIndicador),
+  }
+}
+
+const projetoRelations = {
+  secretaria: { select: { id: true, nome: true } },
+  indicadores: {
+    orderBy: { dataReferencia: 'asc' as const },
+    select: {
+      id: true,
+      titulo: true,
+      valor: true,
+      unidade: true,
+      dataReferencia: true,
+    },
+  },
+}
+
 export async function getSecretariaById(id: number): Promise<Secretaria | null> {
-  const pool = getPool()
-  const [rows] = await pool.query<(Secretaria & RowDataPacket)[]>(
-    `SELECT s.id, s.nome, s.slug, COUNT(p.id) AS projetos_count
-     FROM secretarias s
-     LEFT JOIN projetos p ON p.secretaria_id = s.id
-     WHERE s.id = ?
-     GROUP BY s.id, s.nome, s.slug`,
-    [id],
-  )
-  const row = rows[0]
-  return row ? { ...row, projetos_count: Number(row.projetos_count) } : null
+  const secretaria = await prisma.secretaria.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      nome: true,
+      slug: true,
+      _count: { select: { projetos: true } },
+    },
+  })
+
+  if (!secretaria) return null
+
+  return {
+    id: secretaria.id,
+    nome: secretaria.nome,
+    slug: secretaria.slug,
+    projetos_count: secretaria._count.projetos,
+  }
 }
 
 export async function getSecretariaAdminBySecretariaId(secretariaId: number): Promise<SecretariaAdmin | null> {
-  const pool = getPool()
-  const [rows] = await pool.query<(SecretariaAdmin & RowDataPacket)[]>(
-    `SELECT u.id, u.username, u.secretaria_id, s.nome AS secretaria_nome
-     FROM users u
-     JOIN secretarias s ON s.id = u.secretaria_id
-     WHERE u.role = 'secretaria_admin' AND u.secretaria_id = ?
-     LIMIT 1`,
-    [secretariaId],
-  )
-  return rows[0] ?? null
+  const user = await prisma.user.findFirst({
+    where: {
+      role: UserRole.secretaria_admin,
+      secretariaId,
+    },
+    select: {
+      id: true,
+      username: true,
+      secretariaId: true,
+      secretaria: { select: { nome: true } },
+    },
+  })
+
+  if (!user || user.secretariaId === null || !user.secretaria) return null
+
+  return {
+    id: user.id,
+    username: user.username,
+    secretaria_id: user.secretariaId,
+    secretaria_nome: user.secretaria.nome,
+  }
 }
 
 export async function getSecretarias(): Promise<Secretaria[]> {
-  const pool = getPool()
-  const [rows] = await pool.query<(Secretaria & RowDataPacket)[]>(
-    `SELECT s.id, s.nome, s.slug, COUNT(p.id) AS projetos_count
-     FROM secretarias s
-     LEFT JOIN projetos p ON p.secretaria_id = s.id
-     GROUP BY s.id, s.nome, s.slug
-     ORDER BY s.nome ASC`,
-  )
-  return rows.map((row) => ({ ...row, projetos_count: Number(row.projetos_count) }))
+  const secretarias = await prisma.secretaria.findMany({
+    orderBy: { nome: 'asc' },
+    select: {
+      id: true,
+      nome: true,
+      slug: true,
+      _count: { select: { projetos: true } },
+    },
+  })
+
+  return secretarias.map((secretaria) => ({
+    id: secretaria.id,
+    nome: secretaria.nome,
+    slug: secretaria.slug,
+    projetos_count: secretaria._count.projetos,
+  }))
 }
 
 export async function getSecretariaAdmins(): Promise<SecretariaAdmin[]> {
-  const pool = getPool()
-  const [rows] = await pool.query<(SecretariaAdmin & RowDataPacket)[]>(
-    `SELECT u.id, u.username, u.secretaria_id, s.nome AS secretaria_nome
-     FROM users u
-     JOIN secretarias s ON s.id = u.secretaria_id
-     WHERE u.role = 'secretaria_admin'
-     ORDER BY s.nome ASC, u.username ASC`,
-  )
-  return rows
+  const users = await prisma.user.findMany({
+    where: { role: UserRole.secretaria_admin },
+    orderBy: [{ secretaria: { nome: 'asc' } }, { username: 'asc' }],
+    select: {
+      id: true,
+      username: true,
+      secretariaId: true,
+      secretaria: { select: { nome: true } },
+    },
+  })
+
+  return users.flatMap((user) => {
+    if (user.secretariaId === null || !user.secretaria) return []
+    return [{
+      id: user.id,
+      username: user.username,
+      secretaria_id: user.secretariaId,
+      secretaria_nome: user.secretaria.nome,
+    }]
+  })
 }
 
 export async function getSuperAdmins(): Promise<SuperAdmin[]> {
-  const pool = getPool()
-  const [rows] = await pool.query<(SuperAdmin & RowDataPacket)[]>(
-    `SELECT id, username FROM users WHERE role = 'super_admin' ORDER BY username ASC`,
-  )
-  return rows
-}
+  const users = await prisma.user.findMany({
+    where: { role: UserRole.super_admin },
+    orderBy: { username: 'asc' },
+    select: { id: true, username: true },
+  })
 
-interface ProjetoJoinRow extends RowDataPacket {
-  projeto_id: number
-  projeto_nome: string
-  projeto_descricao: string | null
-  secretaria_id: number
-  secretaria_nome: string
-  indicador_id: number | null
-  indicador_titulo: string | null
-  indicador_valor: number | null
-  indicador_unidade: string | null
-  indicador_data_referencia: string | null
-}
-
-function groupProjetos(rows: ProjetoJoinRow[]): Projeto[] {
-  const byId = new Map<number, Projeto>()
-
-  for (const row of rows) {
-    let projeto = byId.get(row.projeto_id)
-    if (!projeto) {
-      projeto = {
-        id: row.projeto_id,
-        nome: row.projeto_nome,
-        descricao: row.projeto_descricao,
-        secretaria_id: row.secretaria_id,
-        secretaria_nome: row.secretaria_nome,
-        indicadores: [],
-      }
-      byId.set(row.projeto_id, projeto)
-    }
-    if (row.indicador_id) {
-      projeto.indicadores.push({
-        id: row.indicador_id,
-        titulo: row.indicador_titulo!,
-        valor: Number(row.indicador_valor),
-        unidade: row.indicador_unidade,
-        data_referencia: row.indicador_data_referencia!,
-      })
-    }
-  }
-
-  return Array.from(byId.values())
+  return users
 }
 
 export async function getProjetoComIndicadores(projetoId: number): Promise<Projeto | null> {
-  const pool = getPool()
-  const [rows] = await pool.query<ProjetoJoinRow[]>(
-    `SELECT
-       p.id AS projeto_id, p.nome AS projeto_nome, p.descricao AS projeto_descricao,
-       s.id AS secretaria_id, s.nome AS secretaria_nome,
-       i.id AS indicador_id, i.titulo AS indicador_titulo, i.valor AS indicador_valor,
-       i.unidade AS indicador_unidade, i.data_referencia AS indicador_data_referencia
-     FROM projetos p
-     JOIN secretarias s ON s.id = p.secretaria_id
-     LEFT JOIN indicadores i ON i.projeto_id = p.id
-     WHERE p.id = ?
-     ORDER BY i.data_referencia ASC`,
-    [projetoId],
-  )
-  return groupProjetos(rows)[0] ?? null
+  const projeto = await prisma.projeto.findUnique({
+    where: { id: projetoId },
+    include: projetoRelations,
+  })
+
+  return projeto ? mapProjeto(projeto) : null
 }
 
 export async function getProjetosComIndicadores(secretariaId: number): Promise<Projeto[]> {
-  const pool = getPool()
-  const [rows] = await pool.query<ProjetoJoinRow[]>(
-    `SELECT
-       p.id AS projeto_id, p.nome AS projeto_nome, p.descricao AS projeto_descricao,
-       s.id AS secretaria_id, s.nome AS secretaria_nome,
-       i.id AS indicador_id, i.titulo AS indicador_titulo, i.valor AS indicador_valor,
-       i.unidade AS indicador_unidade, i.data_referencia AS indicador_data_referencia
-     FROM projetos p
-     JOIN secretarias s ON s.id = p.secretaria_id
-     LEFT JOIN indicadores i ON i.projeto_id = p.id
-     WHERE p.secretaria_id = ?
-     ORDER BY p.created_at DESC, i.data_referencia ASC`,
-    [secretariaId],
-  )
-  return groupProjetos(rows)
+  const projetos = await prisma.projeto.findMany({
+    where: { secretariaId },
+    orderBy: { createdAt: 'desc' },
+    include: projetoRelations,
+  })
+
+  return projetos.map(mapProjeto)
 }

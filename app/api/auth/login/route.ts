@@ -1,16 +1,7 @@
 import bcrypt from 'bcryptjs'
-import type { RowDataPacket } from 'mysql2'
 import { NextResponse } from 'next/server'
 import { createSessionToken, setSessionCookie } from '@/lib/auth'
-import { getPool } from '@/lib/db'
-
-interface UserRow extends RowDataPacket {
-  id: number
-  username: string
-  password_hash: string
-  role: 'super_admin' | 'secretaria_admin'
-  secretaria_id: number | null
-}
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   const { username, password } = await request.json()
@@ -19,14 +10,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Usuário e senha são obrigatórios.' }, { status: 400 })
   }
 
-  const pool = getPool()
-  const [rows] = await pool.query<UserRow[]>(
-    'SELECT id, username, password_hash, role, secretaria_id FROM users WHERE username = ? LIMIT 1',
-    [username],
-  )
-  const user = rows[0]
+  const user = await prisma.user.findUnique({
+    where: { username },
+    select: {
+      id: true,
+      username: true,
+      passwordHash: true,
+      role: true,
+      secretariaId: true,
+    },
+  })
 
-  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     return NextResponse.json({ error: 'Usuário ou senha inválidos.' }, { status: 401 })
   }
 
@@ -34,7 +29,7 @@ export async function POST(request: Request) {
     userId: user.id,
     username: user.username,
     role: user.role,
-    secretariaId: user.secretaria_id,
+    secretariaId: user.secretariaId,
   })
   await setSessionCookie(token)
 

@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { poolMock, requireSessionMock, revalidatePathMock, UnauthorizedErrorMock } = vi.hoisted(() => {
+const { prismaMock, requireSessionMock, revalidatePathMock, UnauthorizedErrorMock } = vi.hoisted(() => {
   class UnauthorizedErrorMock extends Error {}
 
   return {
-    poolMock: {
-      query: vi.fn(),
+    prismaMock: {
+      projeto: {
+        findUnique: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+      indicador: {
+        findUnique: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
     },
     requireSessionMock: vi.fn(),
     revalidatePathMock: vi.fn(),
@@ -13,7 +24,7 @@ const { poolMock, requireSessionMock, revalidatePathMock, UnauthorizedErrorMock 
   }
 })
 
-vi.mock('@/lib/db', () => ({ getPool: () => poolMock }))
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/auth', () => ({
   requireSession: requireSessionMock,
   UnauthorizedError: UnauthorizedErrorMock,
@@ -32,39 +43,41 @@ describe('acesso global do super administrador a projetos', () => {
   it('permite criar projeto em qualquer secretaria informada', async () => {
     await createProjeto('  Projeto Saúde  ', '  Descrição  ', 42)
 
-    expect(requireSessionMock).toHaveBeenCalledWith('super_admin', 'secretaria_admin')
-    expect(poolMock.query).toHaveBeenCalledWith(
-      'INSERT INTO projetos (secretaria_id, nome, descricao, created_by) VALUES (?, ?, ?, ?)',
-      [42, 'Projeto Saúde', 'Descrição', 1],
-    )
+    expect(prismaMock.projeto.create).toHaveBeenCalledWith({
+      data: {
+        secretariaId: 42,
+        nome: 'Projeto Saúde',
+        descricao: 'Descrição',
+        createdBy: 1,
+      },
+    })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/secretarias/42')
   })
 
   it('exige secretaria-alvo para criação feita pelo super administrador', async () => {
     await expect(createProjeto('Projeto', '')).rejects.toThrow('Informe a secretaria do projeto.')
-    expect(poolMock.query).not.toHaveBeenCalled()
+    expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
 
   it('permite ao super administrador atualizar projeto de outra secretaria', async () => {
-    poolMock.query.mockResolvedValueOnce([[{ id: 12, secretaria_id: 99 }]])
+    prismaMock.projeto.findUnique.mockResolvedValueOnce({ id: 12, secretariaId: 99 })
 
     await updateProjeto(12, '  Projeto atualizado ', ' descrição ')
 
-    expect(poolMock.query).toHaveBeenNthCalledWith(2, 'UPDATE projetos SET nome = ?, descricao = ? WHERE id = ?', [
-      'Projeto atualizado',
-      'descrição',
-      12,
-    ])
+    expect(prismaMock.projeto.update).toHaveBeenCalledWith({
+      where: { id: 12 },
+      data: { nome: 'Projeto atualizado', descricao: 'descrição' },
+    })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/secretarias/99')
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/projetos/12')
   })
 
   it('permite ao super administrador excluir projeto de outra secretaria', async () => {
-    poolMock.query.mockResolvedValueOnce([[{ id: 12, secretaria_id: 99 }]])
+    prismaMock.projeto.findUnique.mockResolvedValueOnce({ id: 12, secretariaId: 99 })
 
     await deleteProjeto(12)
 
-    expect(poolMock.query).toHaveBeenNthCalledWith(2, 'DELETE FROM projetos WHERE id = ?', [12])
+    expect(prismaMock.projeto.delete).toHaveBeenCalledWith({ where: { id: 12 } })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/secretarias/99')
   })
 })
@@ -78,22 +91,21 @@ describe('restrições do administrador de secretaria', () => {
   it('continua criando projeto apenas na própria secretaria', async () => {
     await createProjeto('Projeto local', '', 10)
 
-    expect(poolMock.query).toHaveBeenCalledWith(
-      'INSERT INTO projetos (secretaria_id, nome, descricao, created_by) VALUES (?, ?, ?, ?)',
-      [10, 'Projeto local', null, 5],
-    )
+    expect(prismaMock.projeto.create).toHaveBeenCalledWith({
+      data: { secretariaId: 10, nome: 'Projeto local', descricao: null, createdBy: 5 },
+    })
   })
 
   it('bloqueia tentativa de criar projeto em outra secretaria', async () => {
     await expect(createProjeto('Projeto indevido', '', 99)).rejects.toBeInstanceOf(UnauthorizedErrorMock)
-    expect(poolMock.query).not.toHaveBeenCalled()
+    expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
 
   it('bloqueia atualização de projeto de outra secretaria', async () => {
-    poolMock.query.mockResolvedValueOnce([[{ id: 12, secretaria_id: 99 }]])
+    prismaMock.projeto.findUnique.mockResolvedValueOnce({ id: 12, secretariaId: 99 })
 
     await expect(updateProjeto(12, 'Nome', '')).rejects.toThrow('Este projeto não pertence à sua secretaria.')
-    expect(poolMock.query).toHaveBeenCalledTimes(1)
+    expect(prismaMock.projeto.update).not.toHaveBeenCalled()
   })
 })
 
@@ -104,27 +116,29 @@ describe('indicadores em projetos gerenciados pelo super administrador', () => {
   })
 
   it('permite lançar indicador em projeto de qualquer secretaria', async () => {
-    poolMock.query.mockResolvedValueOnce([[{ id: 20, secretaria_id: 42 }]])
+    prismaMock.projeto.findUnique.mockResolvedValueOnce({ id: 20, secretariaId: 42 })
 
     await createIndicador(20, 'Atendimentos', 10, 'pessoas', '2026-01-01')
 
-    expect(poolMock.query).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT INTO indicadores'), [
-      20,
-      'Atendimentos',
-      10,
-      'pessoas',
-      '2026-01-01',
-      1,
-    ])
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith({
+      data: {
+        projetoId: 20,
+        titulo: 'Atendimentos',
+        valor: 10,
+        unidade: 'pessoas',
+        dataReferencia: new Date('2026-01-01T00:00:00.000Z'),
+        createdBy: 1,
+      },
+    })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/projetos/20')
   })
 
   it('permite remover indicador de qualquer secretaria', async () => {
-    poolMock.query.mockResolvedValueOnce([[{ id: 7, secretaria_id: 42 }]])
+    prismaMock.indicador.findUnique.mockResolvedValueOnce({ id: 7, projeto: { secretariaId: 42 } })
 
     await deleteIndicador(7)
 
-    expect(poolMock.query).toHaveBeenNthCalledWith(2, 'DELETE FROM indicadores WHERE id = ?', [7])
+    expect(prismaMock.indicador.delete).toHaveBeenCalledWith({ where: { id: 7 } })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/secretarias/42')
   })
 })

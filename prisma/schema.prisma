@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  super_admin
+  secretaria_admin
+}
+
+model Secretaria {
+  id        Int       @id @default(autoincrement())
+  nome      String    @unique @db.VarChar(255)
+  slug      String    @unique @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at")
+  users     User[]
+  projetos  Projeto[]
+
+  @@map("secretarias")
+}
+
+model User {
+  id               Int        @id @default(autoincrement())
+  username         String     @unique @db.VarChar(255)
+  passwordHash     String     @map("password_hash") @db.VarChar(255)
+  passwordEncrypted String?   @map("password_encrypted") @db.VarChar(512)
+  role             UserRole
+  secretariaId     Int?       @map("secretaria_id")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at")
+  secretaria       Secretaria? @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  projetosCriados  Projeto[]  @relation("ProjectCreator")
+  indicadoresCriados Indicador[] @relation("IndicatorCreator")
+  auditoriasComoAtor AuditLog[] @relation("AuditActor")
+  auditoriasComoAlvo AuditLog[] @relation("AuditTarget")
+
+  @@index([secretariaId])
+  @@map("users")
+}
+
+model Projeto {
+  id          Int        @id @default(autoincrement())
+  secretariaId Int       @map("secretaria_id")
+  nome        String     @db.VarChar(255)
+  descricao   String?    @db.Text
+  createdBy   Int?       @map("created_by")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at")
+  secretaria  Secretaria @relation(fields: [secretariaId], references: [id], onDelete: Cascade)
+  criador     User?      @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  indicadores Indicador[]
+
+  @@unique([secretariaId, nome], map: "uq_projetos_secretaria_nome")
+  @@index([secretariaId])
+  @@index([createdBy])
+  @@map("projetos")
+}
+
+model Indicador {
+  id             Int       @id @default(autoincrement())
+  projetoId      Int       @map("projeto_id")
+  titulo         String    @db.VarChar(255)
+  valor          Decimal   @db.Decimal(16, 2)
+  unidade        String?   @db.VarChar(30)
+  dataReferencia DateTime  @map("data_referencia") @db.Date
+  createdBy      Int?      @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+  projeto        Projeto   @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  criador        User?     @relation("IndicatorCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([projetoId])
+  @@index([createdBy])
+  @@map("indicadores")
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  actorUserId  Int      @map("actor_user_id")
+  action       String   @db.VarChar(50)
+  targetUserId Int      @map("target_user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  actor        User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  target       User     @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@map("audit_log")
+}

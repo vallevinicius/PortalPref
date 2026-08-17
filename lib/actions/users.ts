@@ -1,42 +1,32 @@
 'use server'
 
 import bcrypt from 'bcryptjs'
-import type { RowDataPacket } from 'mysql2'
+import { UserRole } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { requireSession } from '@/lib/auth'
 import { decryptSecret, encryptSecret } from '@/lib/crypto'
-import { getPool } from '@/lib/db'
+import { prisma } from '@/lib/prisma'
 import { generateRandomPassword } from '@/lib/password'
 
-interface UserRow extends RowDataPacket {
-  id: number
-  role: 'super_admin' | 'secretaria_admin'
-}
-
-interface UserPasswordRow extends RowDataPacket {
-  password_encrypted: string | null
-}
-
-interface UserAuthRow extends RowDataPacket {
-  password_hash: string
-}
-
 async function verifyOwnPassword(userId: number, confirmPassword: string) {
-  const pool = getPool()
-  const [rows] = await pool.query<UserAuthRow[]>('SELECT password_hash FROM users WHERE id = ? LIMIT 1', [userId])
-  const row = rows[0]
-  if (!row || !(await bcrypt.compare(confirmPassword, row.password_hash))) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordHash: true },
+  })
+
+  if (!user || !(await bcrypt.compare(confirmPassword, user.passwordHash))) {
     throw new Error('Senha incorreta.')
   }
 }
 
 async function recordPasswordView(actorUserId: number, targetUserId: number) {
-  const pool = getPool()
-  await pool.query('INSERT INTO audit_log (actor_user_id, action, target_user_id) VALUES (?, ?, ?)', [
-    actorUserId,
-    'view_password',
-    targetUserId,
-  ])
+  await prisma.auditLog.create({
+    data: {
+      actorUserId,
+      action: 'view_password',
+      targetUserId,
+    },
+  })
 }
 
 export async function createSecretariaUser(username: string, secretariaId: number) {
@@ -51,14 +41,18 @@ export async function createSecretariaUser(username: string, secretariaId: numbe
   const passwordHash = await bcrypt.hash(password, 12)
   const passwordEncrypted = encryptSecret(password)
 
-  const pool = getPool()
   try {
-    await pool.query(
-      "INSERT INTO users (username, password_hash, password_encrypted, role, secretaria_id) VALUES (?, ?, ?, 'secretaria_admin', ?)",
-      [trimmed, passwordHash, passwordEncrypted, secretariaId],
-    )
+    await prisma.user.create({
+      data: {
+        username: trimmed,
+        passwordHash,
+        passwordEncrypted,
+        role: UserRole.secretaria_admin,
+        secretariaId,
+      },
+    })
   } catch (err) {
-    if ((err as { code?: string }).code === 'ER_DUP_ENTRY') {
+    if ((err as { code?: string }).code === 'P2002') {
       throw new Error('Já existe um usuário com esse nome de acesso.')
     }
     throw err
@@ -72,11 +66,12 @@ export async function createSecretariaUser(username: string, secretariaId: numbe
 export async function resetSecretariaUserPassword(userId: number) {
   await requireSession('super_admin')
 
-  const pool = getPool()
-  const [rows] = await pool.query<UserRow[]>('SELECT id, role FROM users WHERE id = ? LIMIT 1', [userId])
-  const target = rows[0]
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true },
+  })
 
-  if (!target || target.role !== 'secretaria_admin') {
+  if (!target || target.role !== UserRole.secretaria_admin) {
     throw new Error('Usuário não encontrado ou não é uma conta de secretaria.')
   }
 
@@ -84,11 +79,13 @@ export async function resetSecretariaUserPassword(userId: number) {
   const passwordHash = await bcrypt.hash(password, 12)
   const passwordEncrypted = encryptSecret(password)
 
-  await pool.query('UPDATE users SET password_hash = ?, password_encrypted = ? WHERE id = ?', [
-    passwordHash,
-    passwordEncrypted,
-    userId,
-  ])
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      passwordEncrypted,
+    },
+  })
 
   revalidatePath('/admin')
 
@@ -99,24 +96,22 @@ export async function getSecretariaUserPassword(userId: number, confirmPassword:
   const session = await requireSession('super_admin')
   await verifyOwnPassword(session.userId, confirmPassword)
 
-  const pool = getPool()
-  const [rows] = await pool.query<(UserRow & UserPasswordRow)[]>(
-    'SELECT id, role, password_encrypted FROM users WHERE id = ? LIMIT 1',
-    [userId],
-  )
-  const target = rows[0]
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, passwordEncrypted: true },
+  })
 
-  if (!target || target.role !== 'secretaria_admin') {
+  if (!target || target.role !== UserRole.secretaria_admin) {
     throw new Error('Usuário não encontrado ou não é uma conta de secretaria.')
   }
 
-  if (!target.password_encrypted) {
+  if (!target.passwordEncrypted) {
     throw new Error('Esta senha foi definida antes deste recurso existir. Gere uma nova senha para poder visualizá-la.')
   }
 
   await recordPasswordView(session.userId, target.id)
 
-  return { password: decryptSecret(target.password_encrypted) }
+  return { password: decryptSecret(target.passwordEncrypted) }
 }
 
 export async function createSuperAdmin(username: string) {
@@ -131,14 +126,18 @@ export async function createSuperAdmin(username: string) {
   const passwordHash = await bcrypt.hash(password, 12)
   const passwordEncrypted = encryptSecret(password)
 
-  const pool = getPool()
   try {
-    await pool.query(
-      "INSERT INTO users (username, password_hash, password_encrypted, role, secretaria_id) VALUES (?, ?, ?, 'super_admin', NULL)",
-      [trimmed, passwordHash, passwordEncrypted],
-    )
+    await prisma.user.create({
+      data: {
+        username: trimmed,
+        passwordHash,
+        passwordEncrypted,
+        role: UserRole.super_admin,
+        secretariaId: null,
+      },
+    })
   } catch (err) {
-    if ((err as { code?: string }).code === 'ER_DUP_ENTRY') {
+    if ((err as { code?: string }).code === 'P2002') {
       throw new Error('Já existe um usuário com esse nome de acesso.')
     }
     throw err
@@ -152,11 +151,12 @@ export async function createSuperAdmin(username: string) {
 export async function resetSuperAdminPassword(userId: number) {
   await requireSession('super_admin')
 
-  const pool = getPool()
-  const [rows] = await pool.query<UserRow[]>('SELECT id, role FROM users WHERE id = ? LIMIT 1', [userId])
-  const target = rows[0]
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true },
+  })
 
-  if (!target || target.role !== 'super_admin') {
+  if (!target || target.role !== UserRole.super_admin) {
     throw new Error('Usuário não encontrado ou não é uma conta de administrador supremo.')
   }
 
@@ -164,11 +164,13 @@ export async function resetSuperAdminPassword(userId: number) {
   const passwordHash = await bcrypt.hash(password, 12)
   const passwordEncrypted = encryptSecret(password)
 
-  await pool.query('UPDATE users SET password_hash = ?, password_encrypted = ? WHERE id = ?', [
-    passwordHash,
-    passwordEncrypted,
-    userId,
-  ])
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      passwordEncrypted,
+    },
+  })
 
   revalidatePath('/admin')
 
@@ -179,22 +181,20 @@ export async function getSuperAdminPassword(userId: number, confirmPassword: str
   const session = await requireSession('super_admin')
   await verifyOwnPassword(session.userId, confirmPassword)
 
-  const pool = getPool()
-  const [rows] = await pool.query<(UserRow & UserPasswordRow)[]>(
-    'SELECT id, role, password_encrypted FROM users WHERE id = ? LIMIT 1',
-    [userId],
-  )
-  const target = rows[0]
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, passwordEncrypted: true },
+  })
 
-  if (!target || target.role !== 'super_admin') {
+  if (!target || target.role !== UserRole.super_admin) {
     throw new Error('Usuário não encontrado ou não é uma conta de administrador supremo.')
   }
 
-  if (!target.password_encrypted) {
+  if (!target.passwordEncrypted) {
     throw new Error('Esta senha foi definida antes deste recurso existir. Gere uma nova senha para poder visualizá-la.')
   }
 
   await recordPasswordView(session.userId, target.id)
 
-  return { password: decryptSecret(target.password_encrypted) }
+  return { password: decryptSecret(target.passwordEncrypted) }
 }
