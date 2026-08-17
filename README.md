@@ -21,7 +21,7 @@ Abra o PowerShell ou o terminal na pasta onde o projeto foi clonado e execute:
 
 ```powershell
 git fetch --all
-git switch feat/prisma-migrations-tests
+git switch feat/audit-log
 ```
 
 Confirme a branch atual:
@@ -33,7 +33,7 @@ git branch --show-current
 O resultado esperado é:
 
 ```text
-feat/prisma-migrations-tests
+feat/audit-log
 ```
 
 ## 3. Instalar as dependências
@@ -143,9 +143,12 @@ Depois que as migrations estiverem aplicadas, rode os seeds na seguinte ordem:
 npm run db:seed
 npm run db:seed-secretarias
 npm run db:seed-metricas
+npm run db:seed-demo
 ```
 
-O primeiro comando cria ou atualiza o administrador supremo usando `ADMIN_USERNAME` e `ADMIN_PASSWORD`. O segundo cadastra as secretarias padrão. O terceiro cria os projetos/métricas associados às secretarias encontradas.
+O primeiro comando cria ou atualiza o administrador supremo usando `ADMIN_USERNAME` e `ADMIN_PASSWORD`. O segundo cadastra as secretarias padrão. O terceiro cria os projetos/métricas associados às secretarias encontradas. O quarto comando cria um cenário demonstrativo idempotente com seis secretarias, seis administradores de secretaria, dezoito projetos, trinta e seis indicadores e eventos de auditoria atribuídos a usuários diferentes.
+
+O seed demonstrativo usa os usuários `demo-1` até `demo-6`, todos com a senha temporária `Demo@1234`. Esses usuários servem apenas para demonstração local e devem ser removidos ou ter as senhas alteradas antes de qualquer uso real.
 
 Os seeds de secretarias e métricas são idempotentes: executá-los novamente não deve duplicar registros protegidos por constraints únicas.
 
@@ -169,8 +172,17 @@ A aplicação possui as principais rotas abaixo:
 | `/admin/projetos/:projetoId` | Detalhes e edição de um projeto |
 | `/api/auth/login` | Login via API |
 | `/api/auth/logout` | Encerramento da sessão |
+| `/admin/audit-log` | Histórico completo, filtros e paginação; disponível somente para `super_admin` |
 
-## 9. Executar os testes unitários
+## 9. Audit log e controle de acesso
+
+O sistema registra eventos de autenticação, criação e alteração de secretarias, usuários, projetos e indicadores, redefinição e visualização de credenciais, além da própria consulta do histórico. Cada evento contém o ator, a ação, a entidade, o identificador relacionado, o alvo de usuário quando aplicável, detalhes estruturados e data/hora.
+
+A leitura do audit log é protegida em dois níveis: a página server-side redireciona usuários não autenticados ou que não sejam `super_admin`, e a função de consulta exige novamente `requireSession('super_admin')`. Portanto, administradores de secretaria não conseguem obter os eventos nem acessando a rota diretamente.
+
+O super administrador acessa o histórico pelo botão **Ver audit log completo** no dashboard ou diretamente em `/admin/audit-log`. A tela permite filtrar por ação, tipo de entidade e ator, além de navegar por páginas. Senhas e outros segredos nunca são armazenados nos detalhes dos eventos.
+
+## 10. Executar os testes unitários
 
 Para executar todos os testes uma vez:
 
@@ -190,9 +202,9 @@ Para gerar cobertura, caso o provider de cobertura esteja instalado no ambiente:
 npm run test:coverage
 ```
 
-A suíte criada para esta implementação cobre as ações de secretarias, projetos, indicadores e usuários, a camada de leitura agregada, o login e o singleton de configuração do Prisma. Os testes utilizam mocks do Prisma e não dependem de um banco real.
+A suíte criada para esta implementação cobre as ações de secretarias, projetos, indicadores e usuários, a camada de leitura agregada, o login, o logout, o helper de auditoria, a consulta protegida do audit log e o singleton de configuração do Prisma. Os testes utilizam mocks do Prisma e não dependem de um banco real.
 
-## 10. Executar lint, TypeScript e build
+## 11. Executar lint, TypeScript e build
 
 Use os comandos abaixo antes de abrir um pull request:
 
@@ -204,7 +216,7 @@ npm run build
 
 O build de produção pode carregar as variáveis de `.env`, portanto mantenha o arquivo configurado mesmo quando o objetivo for apenas validar a compilação.
 
-## 11. Abrir o Prisma Studio
+## 12. Abrir o Prisma Studio
 
 Para inspecionar os registros pelo painel do Prisma:
 
@@ -214,7 +226,7 @@ npm run prisma:studio
 
 O comando abre o Prisma Studio em uma porta local informada pelo terminal. Feche o processo com `Ctrl+C` quando terminar.
 
-## 12. Criar uma nova migration
+## 13. Criar uma nova migration
 
 Quando uma alteração de banco for necessária, edite `prisma/schema.prisma`, gere uma migration nomeada e valide o resultado:
 
@@ -229,7 +241,7 @@ npm run build
 
 A pasta criada em `prisma/migrations` deve ser versionada junto com a alteração do schema. Não edite migrations já aplicadas em outros ambientes; crie uma nova migration.
 
-## 13. Resetar um banco de desenvolvimento
+## 14. Resetar um banco de desenvolvimento
 
 O comando abaixo é destrutivo: ele apaga os dados do banco configurado e reaplica o histórico de migrations.
 
@@ -239,7 +251,7 @@ npx prisma migrate reset
 
 Use-o somente em banco descartável de desenvolvimento. Nunca execute esse comando contra produção ou contra uma base contendo dados que não estejam protegidos por backup.
 
-## 14. Solução de problemas comuns
+## 15. Solução de problemas comuns
 
 | Problema | Verificação/recomendação |
 |---|---|
@@ -252,6 +264,6 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 | Tabela já existente durante a migration inicial | Pare, faça backup e avalie o procedimento de baseline com `prisma migrate resolve --applied`; não apague tabelas sem confirmação. |
 | Porta 3000 ocupada | Inicie com outra porta usando `npm run dev -- -p 3001` e abra `http://localhost:3001`. |
 
-## 15. Estado da implementação
+## 16. Estado da implementação
 
-A branch `feat/prisma-migrations-tests` contém os commits segmentados de infraestrutura, schema/migration, acesso a dados, seeds, testes, documentação operacional e configuração por `DATABASE_URL`. A migration inicial deve começar diretamente com `-- CreateTable`, sem BOM UTF-8. Antes deste ajuste, a validação concluída foi de **44 testes passando**; após a atualização do singleton Prisma, a suíte passou com **43 testes**, além de TypeScript, lint, build e validação do schema Prisma.
+A branch `feat/audit-log` contém a implementação incremental do audit log sobre a base Prisma, incluindo migration, helper centralizado, registro nas actions e rotas de autenticação, consulta protegida, interface administrativa, seed demonstrativo, testes unitários e documentação operacional. A branch base continua contendo a infraestrutura Prisma, migrations, acesso global do super administrador a projetos e a suíte anterior; nesta feature a validação ampliada alcança **59 testes passando**, além de TypeScript, lint e build.

@@ -18,7 +18,8 @@
     "db:setup:deploy": "npm run prisma:generate && npm run prisma:migrate:deploy",
     "db:seed": "tsx scripts/seed-admin.ts",
     "db:seed-secretarias": "tsx scripts/seed-secretarias.ts",
-    "db:seed-metricas": "tsx scripts/seed-metricas.ts"
+    "db:seed-metricas": "tsx scripts/seed-metricas.ts",
+    "db:seed-demo": "tsx scripts/seed-demo-audit.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
