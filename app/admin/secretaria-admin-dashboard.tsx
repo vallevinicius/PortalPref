@@ -11,7 +11,7 @@ import { createProjeto } from '@/lib/actions/projetos'
 import type { Projeto } from '@/lib/data'
 import { ProjetoCardGrid } from './projeto-card-grid'
 
-function NovoProjetoForm() {
+export function NovoProjetoForm({ secretariaId }: { secretariaId?: number }) {
   const router = useRouter()
   const [nome, setNome] = useState('')
   const [descricao, setDescricao] = useState('')
@@ -21,7 +21,7 @@ function NovoProjetoForm() {
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createProjeto(nome, descricao)
+        await createProjeto(nome, descricao, secretariaId)
         setNome('')
         setDescricao('')
         toast.success('Projeto criado.')
@@ -35,12 +35,23 @@ function NovoProjetoForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
       <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor="novo-projeto-nome">Nome do projeto</Label>
-        <Input id="novo-projeto-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Conexão Universitária" required />
+        <Label htmlFor={`novo-projeto-nome-${secretariaId ?? 'propria'}`}>Nome do projeto</Label>
+        <Input
+          id={`novo-projeto-nome-${secretariaId ?? 'propria'}`}
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder="Ex.: Conexão Universitária"
+          required
+        />
       </div>
       <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor="novo-projeto-descricao">Descrição (opcional)</Label>
-        <Input id="novo-projeto-descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Breve descrição" />
+        <Label htmlFor={`novo-projeto-descricao-${secretariaId ?? 'propria'}`}>Descrição (opcional)</Label>
+        <Input
+          id={`novo-projeto-descricao-${secretariaId ?? 'propria'}`}
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          placeholder="Breve descrição"
+        />
       </div>
       <Button type="submit" disabled={isPending}>
         {isPending ? 'Criando...' : 'Novo projeto'}

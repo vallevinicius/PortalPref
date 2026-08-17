@@ -3,7 +3,9 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { AdminHeader } from '@/app/admin/admin-header'
 import { SecretariaUserPanel } from '@/app/admin/credential-components'
+import { NovoProjetoForm } from '@/app/admin/secretaria-admin-dashboard'
 import { ProjetoCardGrid } from '@/app/admin/projeto-card-grid'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSession } from '@/lib/auth'
 import { getProjetosComIndicadores, getSecretariaAdminBySecretariaId, getSecretariaById } from '@/lib/data'
 import { getSecretariaIcon } from '@/lib/secretaria-icon'
@@ -49,6 +51,16 @@ export default async function SecretariaDetailPage({ params }: { params: Promise
         </div>
 
         <SecretariaUserPanel secretariaId={secretaria.id} admin={admin} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Novo projeto</CardTitle>
+            <CardDescription>Como super administrador, você pode criar um projeto dentro desta secretaria.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <NovoProjetoForm secretariaId={secretaria.id} />
+          </CardContent>
+        </Card>
 
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-semibold">Projetos e números</h3>

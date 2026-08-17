@@ -17,16 +17,15 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
   const projeto = await getProjetoComIndicadores(id)
   if (!projeto) notFound()
 
+  const isSuperAdmin = session.role === 'super_admin'
   const isOwner = session.role === 'secretaria_admin' && session.secretariaId === projeto.secretaria_id
   if (session.role === 'secretaria_admin' && !isOwner) redirect('/admin')
 
-  const backHref = session.role === 'super_admin' ? `/admin/secretarias/${projeto.secretaria_id}` : '/admin'
+  const backHref = isSuperAdmin ? `/admin/secretarias/${projeto.secretaria_id}` : '/admin'
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 p-6 sm:p-8">
-      <AdminHeader
-        subtitle={`${session.role === 'super_admin' ? 'Painel da Prefeita' : 'Painel da Secretaria'} | ${session.username}`}
-      />
+      <AdminHeader subtitle={`${isSuperAdmin ? 'Painel da Prefeita' : 'Painel da Secretaria'} | ${session.username}`} />
 
       <div className="flex flex-col gap-6">
         <div>
@@ -42,7 +41,7 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
           {projeto.descricao && <p className="mt-1 text-sm text-muted-foreground">{projeto.descricao}</p>}
         </div>
 
-        <ProjetoDashboard projeto={projeto} editable={isOwner} />
+        <ProjetoDashboard projeto={projeto} editable={isSuperAdmin || isOwner} />
       </div>
     </main>
   )
