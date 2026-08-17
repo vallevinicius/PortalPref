@@ -25,6 +25,9 @@ const {
       secretaria: {
         create: vi.fn(),
       },
+      auditLog: {
+        create: vi.fn(),
+      },
     },
     requireSessionMock: vi.fn(),
     revalidatePathMock: vi.fn(),
@@ -47,6 +50,8 @@ describe('ações de projetos', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireSessionMock.mockResolvedValue({ userId: 5, username: 'admin', role: 'secretaria_admin', secretariaId: 10 })
+    prismaMock.projeto.create.mockResolvedValue({ id: 21, nome: 'Projeto novo', secretariaId: 10 })
+    prismaMock.indicador.create.mockResolvedValue({ id: 31, titulo: 'Atendimentos', projetoId: 20 })
   })
 
   it('cria projeto com texto normalizado e valores vazios como null', async () => {
@@ -110,6 +115,7 @@ describe('ação de secretarias', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireSessionMock.mockResolvedValue({ userId: 1, username: 'root', role: 'super_admin', secretariaId: null })
+    prismaMock.secretaria.create.mockResolvedValue({ id: 11, nome: 'Secretaria de Saúde' })
   })
 
   it('cria secretaria com slug normalizado', async () => {
@@ -136,6 +142,7 @@ describe('contrato compartilhado de autorização', () => {
   it('usa a sessão exigida antes de criar um indicador', async () => {
     requireSessionMock.mockResolvedValue({ userId: 5, username: 'admin', role: 'secretaria_admin', secretariaId: 10 })
     prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+    prismaMock.indicador.create.mockResolvedValue({ id: 31, titulo: 'Atendimentos', projetoId: 20 })
 
     await createIndicador(20, 'Atendimentos', 10, '', '2026-01-01')
 

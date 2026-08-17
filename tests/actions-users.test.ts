@@ -111,7 +111,7 @@ describe('ações de usuários e credenciais', () => {
     await expect(getSecretariaUserPassword(10, 'confirmada')).resolves.toEqual({ password: 'SenhaGerada1' })
     expect(bcryptMock.compare).toHaveBeenCalledWith('confirmada', 'hash-do-root')
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
-      data: { actorUserId: 1, action: 'view_password', targetUserId: 10 },
+      data: { actorUserId: 1, action: 'view_password', entityType: 'user', entityId: 10, targetUserId: 10 },
     })
   })
 
@@ -161,7 +161,7 @@ describe('ações de usuários e credenciais', () => {
       .mockResolvedValueOnce({ id: 2, role: 'super_admin', passwordEncrypted: 'enc:SenhaGerada1' })
     await expect(getSuperAdminPassword(2, 'confirmada')).resolves.toEqual({ password: 'SenhaGerada1' })
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
-      data: { actorUserId: 1, action: 'view_password', targetUserId: 2 },
+      data: { actorUserId: 1, action: 'view_password', entityType: 'user', entityId: 2, targetUserId: 2 },
     })
   })
 })

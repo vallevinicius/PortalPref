@@ -17,6 +17,9 @@ const { prismaMock, requireSessionMock, revalidatePathMock, UnauthorizedErrorMoc
         update: vi.fn(),
         delete: vi.fn(),
       },
+      auditLog: {
+        create: vi.fn(),
+      },
     },
     requireSessionMock: vi.fn(),
     revalidatePathMock: vi.fn(),
@@ -38,6 +41,8 @@ describe('acesso global do super administrador a projetos', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireSessionMock.mockResolvedValue({ userId: 1, username: 'admin', role: 'super_admin', secretariaId: null })
+    prismaMock.projeto.create.mockResolvedValue({ id: 21, nome: 'Projeto Saúde', secretariaId: 42 })
+    prismaMock.indicador.create.mockResolvedValue({ id: 8, titulo: 'Atendimentos', projetoId: 20 })
   })
 
   it('permite criar projeto em qualquer secretaria informada', async () => {
@@ -86,6 +91,7 @@ describe('restrições do administrador de secretaria', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireSessionMock.mockResolvedValue({ userId: 5, username: 'secretaria', role: 'secretaria_admin', secretariaId: 10 })
+    prismaMock.projeto.create.mockResolvedValue({ id: 21, nome: 'Projeto local', secretariaId: 10 })
   })
 
   it('continua criando projeto apenas na própria secretaria', async () => {
@@ -113,6 +119,7 @@ describe('indicadores em projetos gerenciados pelo super administrador', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireSessionMock.mockResolvedValue({ userId: 1, username: 'admin', role: 'super_admin', secretariaId: null })
+    prismaMock.indicador.create.mockResolvedValue({ id: 8, titulo: 'Atendimentos', projetoId: 20 })
   })
 
   it('permite lançar indicador em projeto de qualquer secretaria', async () => {

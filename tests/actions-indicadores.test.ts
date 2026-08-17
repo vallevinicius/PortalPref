@@ -17,6 +17,9 @@ const {
         update: vi.fn(),
         delete: vi.fn(),
       },
+      auditLog: {
+        create: vi.fn(),
+      },
     },
     requireSessionMock: vi.fn(),
     revalidatePathMock: vi.fn(),
@@ -37,10 +40,11 @@ describe('ações de indicadores', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireSessionMock.mockResolvedValue({ userId: 5, role: 'secretaria_admin', secretariaId: 10 })
+    prismaMock.indicador.create.mockResolvedValue({ id: 31, titulo: 'Atendimentos', projetoId: 20 })
   })
 
   it('cria indicador normalizando campos e convertendo a data para Date', async () => {
-    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+        prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
 
     await createIndicador(20, '  Atendimentos  ', 123.45, ' pessoas ', '2026-03-15')
 
