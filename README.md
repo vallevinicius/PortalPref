@@ -21,7 +21,7 @@ Abra o PowerShell ou o terminal na pasta onde o projeto foi clonado e execute:
 
 ```powershell
 git fetch --all
-git switch feat/audit-log
+git switch fix/seed-admin-only
 ```
 
 Confirme a branch atual:
@@ -33,7 +33,7 @@ git branch --show-current
 O resultado esperado é:
 
 ```text
-feat/audit-log
+fix/seed-admin-only
 ```
 
 ## 3. Instalar as dependências
@@ -137,20 +137,23 @@ O cliente gerado fica em `node_modules/@prisma/client` e não deve ser versionad
 
 ## 7. Popular os dados iniciais
 
-Depois que as migrations estiverem aplicadas, rode os seeds na seguinte ordem:
+Depois que as migrations estiverem aplicadas, execute o seed padrão:
 
 ```powershell
 npm run db:seed
-npm run db:seed-secretarias
-npm run db:seed-metricas
+```
+
+Esse comando cria ou atualiza **somente o super administrador** usando `ADMIN_USERNAME` e `ADMIN_PASSWORD`. Ele não cria secretarias, usuários de demonstração, projetos, indicadores nem eventos históricos de auditoria. Os comandos `db:seed-secretarias` e `db:seed-metricas` continuam separados e só devem ser executados quando você quiser explicitamente inserir dados iniciais de negócio.
+
+O cenário demonstrativo é totalmente opt-in e não é chamado por `db:seed`, `db:setup` ou `db:setup:deploy`. Para usá-lo apenas em um banco local descartável, execute separadamente:
+
+```powershell
 npm run db:seed-demo
 ```
 
-O primeiro comando cria ou atualiza o administrador supremo usando `ADMIN_USERNAME` e `ADMIN_PASSWORD`. O segundo cadastra as secretarias padrão. O terceiro cria os projetos/métricas associados às secretarias encontradas. O quarto comando cria um cenário demonstrativo idempotente com seis secretarias, seis administradores de secretaria, dezoito projetos, trinta e seis indicadores e eventos de auditoria atribuídos a usuários diferentes.
+Esse comando cria seis secretarias, seis administradores de secretaria, dezoito projetos, trinta e seis indicadores e eventos de auditoria históricos. Nunca inclua `db:seed-demo` no pipeline de produção. Os usuários demo `demo-1` até `demo-6` usam a senha temporária `Demo@1234` e devem permanecer restritos a ambientes locais de demonstração.
 
-O seed demonstrativo usa os usuários `demo-1` até `demo-6`, todos com a senha temporária `Demo@1234`. Esses usuários servem apenas para demonstração local e devem ser removidos ou ter as senhas alteradas antes de qualquer uso real.
-
-Os seeds de secretarias e métricas são idempotentes: executá-los novamente não deve duplicar registros protegidos por constraints únicas.
+Os seeds de secretarias, métricas e demonstração são idempotentes dentro de suas próprias regras; o seed padrão do administrador pode ser executado com segurança para atualizar a senha e o papel do super administrador.
 
 ## 8. Iniciar o site em desenvolvimento
 
@@ -266,4 +269,4 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 
 ## 16. Estado da implementação
 
-A branch `feat/audit-log` contém a implementação incremental do audit log sobre a base Prisma, incluindo migration, helper centralizado, registro nas actions e rotas de autenticação, consulta protegida, interface administrativa, seed demonstrativo, testes unitários e documentação operacional. A branch base continua contendo a infraestrutura Prisma, migrations, acesso global do super administrador a projetos e a suíte anterior; nesta feature a validação ampliada alcança **59 testes passando**, além de TypeScript, lint e build.
+A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reforça que o comando padrão `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. A implementação do audit log permanece disponível, e o cenário demonstrativo continua opt-in pelo comando separado `npm run db:seed-demo`. A validação anterior da feature alcançou **59 testes passando**, além de TypeScript, lint e build.
