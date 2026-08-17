@@ -60,16 +60,11 @@ No Prompt de Comando do Windows, o equivalente é:
 copy .env.example .env
 ```
 
-Abra o arquivo `.env` e configure os valores reais. Um exemplo para um MySQL local é:
+Para o cenário solicitado, configure o arquivo `.env` desta forma:
 
 ```dotenv
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=portal_pref
-DB_PASSWORD=sua_senha_mysql
-DB_NAME=portal_pref
-
-DATABASE_URL=mysql://portal_pref:sua_senha_mysql@127.0.0.1:3306/portal_pref
+DATABASE_URL="mysql://root:vinicius@localhost:3306/apaixonese"
+PORT=3305
 
 SESSION_SECRET=troque-por-um-segredo-longo-e-aleatorio
 PASSWORD_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
@@ -78,15 +73,15 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=troque-esta-senha
 ```
 
-`DATABASE_URL` é usada pelo Prisma. As variáveis `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` e `DB_NAME` são usadas pelo comando que cria o banco antes da aplicação das migrations.
+O Prisma usa exclusivamente `DATABASE_URL` para conectar ao MySQL. A variável `PORT` define a porta HTTP do Next.js; neste caso, o site será aberto em [http://localhost:3305](http://localhost:3305).
 
 Se a senha do MySQL possuir caracteres especiais, como `@`, `#`, `/`, `:` ou espaços, faça URL encoding na senha dentro de `DATABASE_URL`. Por exemplo, `p@ss word` deve ser representada como `p%40ss%20word`.
 
-Nunca versione o arquivo `.env` nem compartilhe os valores reais de `SESSION_SECRET`, `PASSWORD_ENCRYPTION_KEY` ou `ADMIN_PASSWORD`.
+Nunca versione o arquivo `.env` nem compartilhe os valores reais de `DATABASE_URL`, `SESSION_SECRET`, `PASSWORD_ENCRYPTION_KEY` ou `ADMIN_PASSWORD`.
 
-## 5. Criar o banco e aplicar as migrations
+## 5. Criar o banco e aplicar as migrations com Prisma
 
-Com o MySQL em execução e as credenciais configuradas, rode:
+Com o MySQL em execução e o usuário da `DATABASE_URL` autorizado a criar bancos, rode:
 
 ```powershell
 npm run db:setup
@@ -95,19 +90,26 @@ npm run db:setup
 Esse comando executa, em sequência:
 
 ```powershell
-npm run db:create
-npm run prisma:migrate:deploy
+npm run prisma:generate
+npm run prisma:migrate
 ```
 
-O primeiro comando cria o banco definido em `DB_NAME`, caso ele ainda não exista. O segundo aplica as migrations presentes em `prisma/migrations` sem criar alterações interativas.
+O `prisma generate` cria o cliente TypeScript. O `prisma migrate dev` compara `prisma/schema.prisma`, cria uma migration quando necessário, aplica o histórico ao banco e executa os generators. Em uma base nova, esse é o fluxo recomendado para desenvolvimento.
 
 Você também pode executar as etapas separadamente:
 
 ```powershell
-npm run db:create
-npm run prisma:generate
-npm run prisma:migrate:deploy
+npx prisma generate
+npx prisma migrate dev
 ```
+
+Para ambientes que devem apenas aplicar migrations já versionadas, sem criar novas migrations interativamente, use:
+
+```powershell
+npm run db:setup:deploy
+```
+
+Esse comando executa `prisma generate` e `prisma migrate deploy`.
 
 Confira o estado do histórico Prisma sem alterar o banco:
 
@@ -117,15 +119,11 @@ npx prisma migrate status
 
 ### Banco já existente
 
-Se o banco já possui as tabelas do projeto, faça um backup antes de qualquer procedimento. A migration inicial foi criada para bancos novos. Não execute `migrate deploy` cegamente em um banco legado que ainda não possui o histórico `_prisma_migrations`, pois o Prisma pode tentar criar tabelas que já existem.
+Faça um backup antes de usar `migrate dev` ou `migrate reset` em um banco com dados. O banco `apaixonese` configurado localmente já possui registros na tabela `_prisma_migrations` que não estão presentes nesta branch. Por isso, o status pode indicar histórico divergente.
 
-Quando o schema existente for comprovadamente equivalente à migration inicial, o histórico pode ser marcado como aplicado com:
+Para uma instalação de teste limpa, prefira criar um banco novo na URL, por exemplo `apaixonese_dev`, e execute `npm run db:setup`. Se `apaixonese` for descartável e você quiser recriá-lo do zero, faça backup e use o procedimento destrutivo apropriado no seu ambiente antes de rodar novamente `npx prisma migrate dev`.
 
-```powershell
-npx prisma migrate resolve --applied 20260817134219_init
-```
-
-Use esse comando somente depois de comparar o schema real com `prisma/schema.prisma` e com `prisma/migrations/20260817134219_init/migration.sql`.
+Não marque `20260817134219_init` como aplicada com `prisma migrate resolve` sem comparar o schema real, pois isso pode fazer o Prisma acreditar que tabelas existentes já correspondem ao schema desta branch.
 
 ## 6. Gerar o cliente Prisma
 
@@ -246,7 +244,7 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 | Problema | Verificação/recomendação |
 |---|---|
 | `Can't reach database server` | Confirme se o MySQL está em execução, se a porta está correta e se `DATABASE_URL` aponta para o host certo. |
-| `Unknown database` | Execute `npm run db:create` ou verifique `DB_NAME` no `.env`. |
+| `Unknown database` | Execute `npm run db:setup` e confirme se o usuário da `DATABASE_URL` tem permissão para criar o banco. |
 | `P1001` ou `P1003` | Revise host, porta, usuário, senha e nome do banco na `DATABASE_URL`. |
 | Erro de autenticação no site | Confirme os valores usados no seed e execute `npm run db:seed` novamente. |
 | `prisma generate` com cliente desatualizado | Execute `npm run prisma:generate` depois de alterar o schema. |
