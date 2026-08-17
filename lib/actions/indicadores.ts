@@ -2,7 +2,7 @@
 
 import type { RowDataPacket } from 'mysql2'
 import { revalidatePath } from 'next/cache'
-import { requireSession, UnauthorizedError } from '@/lib/auth'
+import { requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
 import { getPool } from '@/lib/db'
 
 interface OwnershipRow extends RowDataPacket {
@@ -10,16 +10,31 @@ interface OwnershipRow extends RowDataPacket {
   secretaria_id: number
 }
 
-async function assertOwnsProjeto(projetoId: number, secretariaId: number) {
+async function assertProjetoAccess(projetoId: number, session: SessionPayload) {
   const pool = getPool()
   const [rows] = await pool.query<OwnershipRow[]>('SELECT id, secretaria_id FROM projetos WHERE id = ? LIMIT 1', [projetoId])
   const projeto = rows[0]
-  if (!projeto || projeto.secretaria_id !== secretariaId) {
+
+  if (!projeto) {
+    throw new UnauthorizedError('Projeto não encontrado.')
+  }
+
+  if (session.role === 'super_admin') {
+    return projeto
+  }
+
+  if (!session.secretariaId) {
+    throw new UnauthorizedError('Sua conta não está vinculada a uma secretaria.')
+  }
+
+  if (projeto.secretaria_id !== session.secretariaId) {
     throw new UnauthorizedError('Este projeto não pertence à sua secretaria.')
   }
+
+  return projeto
 }
 
-async function assertOwnsIndicador(indicadorId: number, secretariaId: number) {
+async function assertIndicadorAccess(indicadorId: number, session: SessionPayload) {
   const pool = getPool()
   const [rows] = await pool.query<OwnershipRow[]>(
     `SELECT indicadores.id AS id, projetos.secretaria_id AS secretaria_id
@@ -30,9 +45,24 @@ async function assertOwnsIndicador(indicadorId: number, secretariaId: number) {
     [indicadorId],
   )
   const indicador = rows[0]
-  if (!indicador || indicador.secretaria_id !== secretariaId) {
+
+  if (!indicador) {
+    throw new UnauthorizedError('Indicador não encontrado.')
+  }
+
+  if (session.role === 'super_admin') {
+    return indicador
+  }
+
+  if (!session.secretariaId) {
+    throw new UnauthorizedError('Sua conta não está vinculada a uma secretaria.')
+  }
+
+  if (indicador.secretaria_id !== session.secretariaId) {
     throw new UnauthorizedError('Este indicador não pertence à sua secretaria.')
   }
+
+  return indicador
 }
 
 export async function createIndicador(
@@ -42,11 +72,8 @@ export async function createIndicador(
   unidade: string,
   dataReferencia: string,
 ) {
-  const session = await requireSession('secretaria_admin')
-  if (!session.secretariaId) {
-    throw new UnauthorizedError('Sua conta não está vinculada a uma secretaria.')
-  }
-  await assertOwnsProjeto(projetoId, session.secretariaId)
+  const session = await requireSession('super_admin', 'secretaria_admin')
+  const projeto = await assertProjetoAccess(projetoId, session)
 
   const trimmedTitulo = titulo.trim()
   if (!trimmedTitulo || Number.isNaN(valor) || !dataReferencia) {
@@ -60,6 +87,8 @@ export async function createIndicador(
   )
 
   revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretaria_id}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
 }
 
 export async function updateIndicador(
@@ -69,11 +98,8 @@ export async function updateIndicador(
   unidade: string,
   dataReferencia: string,
 ) {
-  const session = await requireSession('secretaria_admin')
-  if (!session.secretariaId) {
-    throw new UnauthorizedError('Sua conta não está vinculada a uma secretaria.')
-  }
-  await assertOwnsIndicador(indicadorId, session.secretariaId)
+  const session = await requireSession('super_admin', 'secretaria_admin')
+  const indicador = await assertIndicadorAccess(indicadorId, session)
 
   const trimmedTitulo = titulo.trim()
   if (!trimmedTitulo || Number.isNaN(valor) || !dataReferencia) {
@@ -90,17 +116,16 @@ export async function updateIndicador(
   ])
 
   revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${indicador.secretaria_id}`)
 }
 
 export async function deleteIndicador(indicadorId: number) {
-  const session = await requireSession('secretaria_admin')
-  if (!session.secretariaId) {
-    throw new UnauthorizedError('Sua conta não está vinculada a uma secretaria.')
-  }
-  await assertOwnsIndicador(indicadorId, session.secretariaId)
+  const session = await requireSession('super_admin', 'secretaria_admin')
+  const indicador = await assertIndicadorAccess(indicadorId, session)
 
   const pool = getPool()
   await pool.query('DELETE FROM indicadores WHERE id = ?', [indicadorId])
 
   revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${indicador.secretaria_id}`)
 }
