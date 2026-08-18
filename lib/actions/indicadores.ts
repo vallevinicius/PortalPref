@@ -115,6 +115,36 @@ export async function createIndicador(
   revalidatePath(`/admin/projetos/${projetoId}`)
 }
 
+export async function renameIndicadorGrupo(projetoId: number, tituloAtual: string, novoTitulo: string) {
+  const session = await requireSession('super_admin', 'secretaria_admin')
+  const projeto = await assertProjetoAccess(projetoId, session)
+
+  const trimmed = novoTitulo.trim()
+  if (!trimmed) {
+    throw new Error('Informe um nome para o gráfico.')
+  }
+
+  const result = await prisma.indicador.updateMany({
+    where: { projetoId, titulo: tituloAtual },
+    data: { titulo: trimmed },
+  })
+
+  if (result.count === 0) {
+    throw new Error('Gráfico não encontrado.')
+  }
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.rename_group',
+    entityType: 'indicator',
+    details: { tituloAntigo: tituloAtual, tituloNovo: trimmed, projetoId, secretariaId: projeto.secretariaId },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
+}
+
 export async function updateIndicador(
   indicadorId: number,
   titulo: string,
