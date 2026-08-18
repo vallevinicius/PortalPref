@@ -185,6 +185,12 @@ A leitura do registro de auditoria é protegida em dois níveis: a página serve
 
 O super administrador acessa o histórico pelo botão **Ver registro de auditoria completo** no dashboard ou diretamente em `/admin/audit-log`. A tela permite filtrar por ação, tipo de entidade e ator, além de navegar por páginas. A coluna **Resumo e informações** apresenta uma explicação em linguagem simples e traduz os campos técnicos, como secretaria relacionada e perfil de acesso. Senhas e outros segredos nunca são armazenados nos detalhes dos eventos. Registros antigos de login, logout, consulta e seed permanecem preservados no banco, mas são ignorados na listagem operacional.
 
+### Proteção de visibilidade e acesso
+
+O site inteiro envia metadata e o cabeçalho `X-Robots-Tag` com `noindex`, `nofollow`, `noarchive`, `nosnippet` e `noimageindex`. O endpoint `robots.txt` bloqueia o rastreamento de todas as rotas e não existe sitemap público. Essas medidas reduzem a descoberta por buscadores, mas não substituem a autenticação: as rotas administrativas continuam protegidas no servidor.
+
+A rota de login possui proteção operacional persistente. Cinco falhas dentro de uma janela de 15 minutos bloqueiam temporariamente novas tentativas por 15 minutos, considerando tanto o usuário quanto a origem da requisição. O banco armazena somente chaves hash, nunca o endereço ou a senha em texto claro. Um login válido limpa as falhas anteriores daquele usuário e origem. A API retorna `429` com `Retry-After` durante o bloqueio.
+
 ## 10. Executar os testes unitários
 
 Para executar todos os testes uma vez:
@@ -205,7 +211,7 @@ Para gerar cobertura, caso o provider de cobertura esteja instalado no ambiente:
 npm run test:coverage
 ```
 
-A suíte criada para esta implementação cobre as ações de secretarias, projetos, indicadores e usuários, a camada de leitura agregada, o login, o logout, o helper de auditoria, a consulta protegida do registro de auditoria e o singleton de configuração do Prisma. Os testes utilizam mocks do Prisma e não dependem de um banco real.
+A suíte criada para esta implementação cobre as ações de secretarias, projetos, indicadores e usuários, a camada de leitura agregada, o login, o logout, o throttling persistente, os contratos de visibilidade do site, o helper de auditoria, a consulta protegida do registro de auditoria e o singleton de configuração do Prisma. Os testes utilizam mocks do Prisma e não dependem de um banco real. A branch atual foi validada com **71 testes passando**.
 
 ## 11. Executar lint, TypeScript e build
 

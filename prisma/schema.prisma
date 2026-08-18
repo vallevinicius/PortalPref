@@ -96,3 +96,15 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_log")
 }
+
+
+model LoginThrottle {
+  key              String   @id @db.Char(64)
+  failedAttempts   Int      @default(0) @map("failed_attempts")
+  windowStartedAt  DateTime @default(now()) @map("window_started_at")
+  blockedUntil     DateTime? @map("blocked_until")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([blockedUntil])
+  @@map("login_throttles")
+}
