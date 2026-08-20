@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Gauge, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -27,9 +27,22 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createIndicador, deleteIndicador, renameIndicadorGrupo } from '@/lib/actions/indicadores'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  createIndicador,
+  deleteIndicador,
+  removeIndicadorEscala,
+  renameIndicadorGrupo,
+  setIndicadorEscala,
+} from '@/lib/actions/indicadores'
 import { deleteProjeto } from '@/lib/actions/projetos'
-import type { Indicador, Projeto } from '@/lib/data'
+import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
 
 const LINE_COLOR = '#006e6d'
 const GRID_COLOR = '#e1e0d9'
@@ -44,6 +57,33 @@ const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'O
 
 function formatDataLonga(data: string) {
   return new Date(`${data}T00:00:00`).toLocaleDateString('pt-BR')
+}
+
+const ESCALA_NIVEIS = [
+  { label: 'Ruim', color: '#971010' },
+  { label: 'Razoável', color: '#cf6428' },
+  { label: 'Bom', color: '#cca821' },
+  { label: 'Ótimo', color: '#55a35f' },
+  { label: 'Excelente', color: '#146530' },
+]
+
+function classificarValor(valor: number, escala: IndicadorEscala) {
+  const intervalo = escala.valor_maximo - escala.valor_minimo
+  if (intervalo <= 0) return null
+  const fracao = Math.min(1, Math.max(0, (valor - escala.valor_minimo) / intervalo))
+  const indice = Math.min(4, Math.floor(fracao * 5))
+  return ESCALA_NIVEIS[escala.crescente_melhor ? indice : 4 - indice]
+}
+
+function EscalaBadge({ valor, escala }: { valor: number; escala: IndicadorEscala }) {
+  const nivel = classificarValor(valor, escala)
+  if (!nivel) return null
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+      <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: nivel.color }} />
+      {nivel.label}
+    </span>
+  )
 }
 
 interface Bucket {
@@ -227,11 +267,13 @@ function IndicadorChart({
   pontos,
   projetoId,
   editable,
+  escala,
 }: {
   titulo: string
   pontos: Indicador[]
   projetoId: number
   editable: boolean
+  escala: IndicadorEscala | undefined
 }) {
   const unidade = pontos[0]?.unidade ?? null
   const total = pontos.reduce((soma, ponto) => soma + ponto.valor, 0)
@@ -249,11 +291,13 @@ function IndicadorChart({
         <div className="flex items-center gap-1">
           <p className="text-sm font-medium text-foreground">{titulo}</p>
           {editable && <RenomearGraficoButton projetoId={projetoId} tituloAtual={titulo} />}
+          {editable && <EscalaConfigButton projetoId={projetoId} titulo={titulo} escala={escala} />}
         </div>
         <DeltaBadge delta={delta} deltaPct={deltaPct} />
       </div>
       <div className="mb-2 flex items-end justify-between gap-2">
         <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValor(total, unidade)}</p>
+        {escala && <EscalaBadge valor={total} escala={escala} />}
       </div>
       <div className="mb-3">
         <RangeSwitcher range={range} onChange={setRange} />
@@ -282,6 +326,111 @@ function IndicadorChart({
   )
 }
 
+function EscalaConfigButton({
+  projetoId,
+  titulo,
+  escala,
+}: {
+  projetoId: number
+  titulo: string
+  escala: IndicadorEscala | undefined
+}) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [minimo, setMinimo] = useState('')
+  const [maximo, setMaximo] = useState('')
+  const [direcao, setDirecao] = useState<'melhor' | 'pior'>('melhor')
+  const [isPending, startTransition] = useTransition()
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
+      setMinimo(escala ? String(escala.valor_minimo) : '')
+      setMaximo(escala ? String(escala.valor_maximo) : '')
+      setDirecao(escala && !escala.crescente_melhor ? 'pior' : 'melhor')
+    }
+    setOpen(nextOpen)
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    startTransition(async () => {
+      try {
+        await setIndicadorEscala(projetoId, titulo, Number(minimo), Number(maximo), direcao === 'melhor')
+        setOpen(false)
+        toast.success('Escala configurada.')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível configurar a escala.')
+      }
+    })
+  }
+
+  function handleRemove() {
+    startTransition(async () => {
+      try {
+        await removeIndicadorEscala(projetoId, titulo)
+        setOpen(false)
+        toast.success('Escala removida.')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível remover a escala.')
+      }
+    })
+  }
+
+  return (
+    <>
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => handleOpenChange(true)} aria-label="Configurar escala">
+        <Gauge className="size-3.5" />
+      </Button>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Escala de classificação</DialogTitle>
+            <DialogDescription>
+              Defina a faixa de valores desse gráfico para classificar automaticamente em Ruim, Razoável, Bom, Ótimo ou Excelente.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="escala-minimo">Valor mínimo</Label>
+                <Input id="escala-minimo" type="number" step="any" value={minimo} onChange={(e) => setMinimo(e.target.value)} required autoFocus />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="escala-maximo">Valor máximo</Label>
+                <Input id="escala-maximo" type="number" step="any" value={maximo} onChange={(e) => setMaximo(e.target.value)} required />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="escala-direcao">Direção</Label>
+              <Select value={direcao} onValueChange={(value) => setDirecao(value as 'melhor' | 'pior')}>
+                <SelectTrigger id="escala-direcao" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="melhor">Quanto maior, melhor</SelectItem>
+                  <SelectItem value="pior">Quanto maior, pior</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter className={escala ? 'sm:justify-between' : undefined}>
+              {escala && (
+                <Button type="button" variant="outline" onClick={handleRemove} disabled={isPending}>
+                  Remover escala
+                </Button>
+              )}
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Salvando...' : 'Salvar escala'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 function todayLocalISODate() {
   const hoje = new Date()
   const yyyy = hoje.getFullYear()
@@ -293,14 +442,16 @@ function todayLocalISODate() {
 function NovoIndicadorForm({ projetoId, titulo }: { projetoId: number; titulo: string }) {
   const router = useRouter()
   const [valor, setValor] = useState('')
+  const [data, setData] = useState('')
   const [isPending, startTransition] = useTransition()
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createIndicador(projetoId, titulo, Number(valor), '', todayLocalISODate())
+        await createIndicador(projetoId, titulo, Number(valor), '', data || todayLocalISODate())
         setValor('')
+        setData('')
         toast.success('Número adicionado.')
         router.refresh()
       } catch (err) {
@@ -321,6 +472,14 @@ function NovoIndicadorForm({ projetoId, titulo }: { projetoId: number; titulo: s
         className="h-8 flex-1"
         required
       />
+      <Input
+        type="date"
+        value={data}
+        onChange={(e) => setData(e.target.value)}
+        max={todayLocalISODate()}
+        aria-label={`Data para ${titulo} (opcional, padrão hoje)`}
+        className="h-8 w-[9.5rem]"
+      />
       <Button type="submit" size="sm" disabled={isPending}>
         {isPending ? 'Salvando...' : 'Adicionar'}
       </Button>
@@ -333,15 +492,17 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
   const [open, setOpen] = useState(false)
   const [nome, setNome] = useState('')
   const [valor, setValor] = useState('')
+  const [data, setData] = useState('')
   const [isPending, startTransition] = useTransition()
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createIndicador(projetoId, nome, Number(valor), '', todayLocalISODate())
+        await createIndicador(projetoId, nome, Number(valor), '', data || todayLocalISODate())
         setNome('')
         setValor('')
+        setData('')
         setOpen(false)
         toast.success('Gráfico criado.')
         router.refresh()
@@ -384,6 +545,16 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
                 required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="novo-grafico-data">Data (opcional — se vazio, usa hoje)</Label>
+              <Input
+                id="novo-grafico-data"
+                type="date"
+                value={data}
+                onChange={(e) => setData(e.target.value)}
+                max={todayLocalISODate()}
               />
             </div>
             <DialogFooter>
@@ -603,6 +774,12 @@ export function ProjetoDashboard({ projeto, editable }: { projeto: Projeto; edit
     }))
   }, [projeto.indicadores])
 
+  const escalasPorTitulo = useMemo(() => {
+    const map = new Map<string, IndicadorEscala>()
+    for (const escala of projeto.escalas) map.set(escala.titulo, escala)
+    return map
+  }, [projeto.escalas])
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-2">
@@ -621,6 +798,7 @@ export function ProjetoDashboard({ projeto, editable }: { projeto: Projeto; edit
               pontos={grupo.pontos}
               projetoId={projeto.id}
               editable={editable}
+              escala={escalasPorTitulo.get(grupo.titulo)}
             />
           ))}
         </div>

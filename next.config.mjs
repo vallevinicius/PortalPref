@@ -9,10 +9,11 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
   },
+  { key: "X-Frame-Options", value: "DENY" },
 ];
 
 const nextConfig = {
-  allowedDevOrigins: ["172.17.56.61"],
+  allowedDevOrigins: ["172.17.56.58"],
   typescript: {
     ignoreBuildErrors: true,
   },

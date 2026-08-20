@@ -133,6 +133,16 @@ export async function renameIndicadorGrupo(projetoId: number, tituloAtual: strin
     throw new Error('Gráfico não encontrado.')
   }
 
+  try {
+    await prisma.indicadorEscala.updateMany({
+      where: { projetoId, titulo: tituloAtual },
+      data: { titulo: trimmed },
+    })
+  } catch {
+    // Já existe uma escala configurada com o novo nome nesse projeto: descarta a antiga.
+    await prisma.indicadorEscala.deleteMany({ where: { projetoId, titulo: tituloAtual } })
+  }
+
   await recordAuditLog({
     actorUserId: session.userId,
     action: 'indicator.rename_group',
@@ -196,4 +206,57 @@ export async function deleteIndicador(indicadorId: number) {
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${indicador.projeto.secretariaId}`)
   revalidatePath(`/admin/projetos/${indicadorId}`)
+}
+
+export async function setIndicadorEscala(
+  projetoId: number,
+  titulo: string,
+  valorMinimo: number,
+  valorMaximo: number,
+  crescenteMelhor: boolean,
+) {
+  const session = await requireSession('super_admin', 'secretaria_admin')
+  const projeto = await assertProjetoAccess(projetoId, session)
+
+  if (!Number.isFinite(valorMinimo) || !Number.isFinite(valorMaximo)) {
+    throw new Error('Informe o valor mínimo e o valor máximo da escala.')
+  }
+  if (valorMinimo >= valorMaximo) {
+    throw new Error('O valor máximo precisa ser maior que o valor mínimo.')
+  }
+
+  await prisma.indicadorEscala.upsert({
+    where: { projetoId_titulo: { projetoId, titulo } },
+    create: { projetoId, titulo, valorMinimo, valorMaximo, crescenteMelhor },
+    update: { valorMinimo, valorMaximo, crescenteMelhor },
+  })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.set_scale',
+    entityType: 'indicator',
+    details: { titulo, projetoId, secretariaId: projeto.secretariaId, valorMinimo, valorMaximo, crescenteMelhor },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
+}
+
+export async function removeIndicadorEscala(projetoId: number, titulo: string) {
+  const session = await requireSession('super_admin', 'secretaria_admin')
+  const projeto = await assertProjetoAccess(projetoId, session)
+
+  await prisma.indicadorEscala.deleteMany({ where: { projetoId, titulo } })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.remove_scale',
+    entityType: 'indicator',
+    details: { titulo, projetoId, secretariaId: projeto.secretariaId },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
 }

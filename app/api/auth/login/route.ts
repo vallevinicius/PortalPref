@@ -4,6 +4,10 @@ import { createSessionToken, setSessionCookie } from '@/lib/auth'
 import { clearLoginFailures, getLoginClientIdentifier, getLoginThrottleStatus, registerFailedLogin } from '@/lib/login-throttle'
 import { prisma } from '@/lib/prisma'
 
+// Hash fixo usado quando o usuário não existe, para que o tempo de resposta
+// não revele (por timing) se um nome de usuário é válido ou não.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('nenhum-usuario-com-este-nome-existe', 12)
+
 export async function POST(request: Request) {
   const { username, password } = await request.json()
 
@@ -31,7 +35,9 @@ export async function POST(request: Request) {
     },
   })
 
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+  const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH)
+
+  if (!user || !passwordMatches) {
     await registerFailedLogin(username, clientIdentifier)
     return NextResponse.json({ error: 'Usuário ou senha inválidos.' }, { status: 401 })
   }

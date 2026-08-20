@@ -28,6 +28,13 @@ export interface Indicador {
   data_referencia: string
 }
 
+export interface IndicadorEscala {
+  titulo: string
+  valor_minimo: number
+  valor_maximo: number
+  crescente_melhor: boolean
+}
+
 export interface Projeto {
   id: number
   nome: string
@@ -35,6 +42,7 @@ export interface Projeto {
   secretaria_id: number
   secretaria_nome: string
   indicadores: Indicador[]
+  escalas: IndicadorEscala[]
 }
 
 function formatDate(date: Date) {
@@ -70,6 +78,12 @@ function mapProjeto(projeto: {
     unidade: string | null
     dataReferencia: Date
   }>
+  indicadorEscalas: Array<{
+    titulo: string
+    valorMinimo: unknown
+    valorMaximo: unknown
+    crescenteMelhor: boolean
+  }>
 }): Projeto {
   return {
     id: projeto.id,
@@ -78,6 +92,12 @@ function mapProjeto(projeto: {
     secretaria_id: projeto.secretariaId,
     secretaria_nome: projeto.secretaria.nome,
     indicadores: projeto.indicadores.map(mapIndicador),
+    escalas: projeto.indicadorEscalas.map((escala) => ({
+      titulo: escala.titulo,
+      valor_minimo: Number(escala.valorMinimo),
+      valor_maximo: Number(escala.valorMaximo),
+      crescente_melhor: escala.crescenteMelhor,
+    })),
   }
 }
 
@@ -91,6 +111,14 @@ const projetoRelations = {
       valor: true,
       unidade: true,
       dataReferencia: true,
+    },
+  },
+  indicadorEscalas: {
+    select: {
+      titulo: true,
+      valorMinimo: true,
+      valorMaximo: true,
+      crescenteMelhor: true,
     },
   },
 }

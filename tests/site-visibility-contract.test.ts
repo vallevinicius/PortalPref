@@ -28,7 +28,7 @@ describe('proteção de visibilidade do site', () => {
   it('envia cabeçalho para evitar indexação mesmo fora do HTML', () => {
     const nextConfig = readProjectFile('next.config.mjs')
 
-    expect(nextConfig).toContain("key: 'X-Robots-Tag'")
+    expect(nextConfig).toContain('key: "X-Robots-Tag"')
     expect(nextConfig).toContain('noindex, nofollow, noarchive')
   })
 })

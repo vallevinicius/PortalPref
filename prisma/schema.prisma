@@ -53,6 +53,7 @@ model Projeto {
   secretaria  Secretaria @relation(fields: [secretariaId], references: [id], onDelete: Cascade)
   criador     User?      @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   indicadores Indicador[]
+  indicadorEscalas IndicadorEscala[]
 
   @@unique([secretariaId, nome], map: "uq_projetos_secretaria_nome")
   @@index([secretariaId])
@@ -76,6 +77,21 @@ model Indicador {
   @@index([projetoId])
   @@index([createdBy])
   @@map("indicadores")
+}
+
+model IndicadorEscala {
+  id              Int      @id @default(autoincrement())
+  projetoId       Int      @map("projeto_id")
+  titulo          String   @db.VarChar(255)
+  valorMinimo     Decimal  @map("valor_minimo") @db.Decimal(16, 2)
+  valorMaximo     Decimal  @map("valor_maximo") @db.Decimal(16, 2)
+  crescenteMelhor Boolean  @map("crescente_melhor")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+  projeto         Projeto  @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  @@unique([projetoId, titulo], map: "uq_escala_projeto_titulo")
+  @@map("indicador_escalas")
 }
 
 model AuditLog {

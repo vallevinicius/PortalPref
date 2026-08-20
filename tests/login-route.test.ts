@@ -10,7 +10,7 @@ const {
   getLoginThrottleStatusMock,
   registerFailedLoginMock,
 } = vi.hoisted(() => ({
-  bcryptMock: { compare: vi.fn() },
+  bcryptMock: { compare: vi.fn(), hashSync: vi.fn().mockReturnValue('dummy-hash') },
   prismaMock: {
     user: { findUnique: vi.fn() },
   },

@@ -135,6 +135,14 @@ describe('lib/data', () => {
           dataReferencia: new Date('2026-03-15T00:00:00.000Z'),
         },
       ],
+      indicadorEscalas: [
+        {
+          titulo: 'Atendimentos',
+          valorMinimo: { toString: () => '0' },
+          valorMaximo: { toString: () => '100' },
+          crescenteMelhor: true,
+        },
+      ],
     })
 
     await expect(getProjetoComIndicadores(10)).resolves.toEqual({
@@ -152,6 +160,14 @@ describe('lib/data', () => {
           data_referencia: '2026-03-15',
         },
       ],
+      escalas: [
+        {
+          titulo: 'Atendimentos',
+          valor_minimo: 0,
+          valor_maximo: 100,
+          crescente_melhor: true,
+        },
+      ],
     })
   })
 
@@ -167,6 +183,7 @@ describe('lib/data', () => {
         secretariaId: 2,
         secretaria: { id: 2, nome: 'Saúde' },
         indicadores: [],
+        indicadorEscalas: [],
       },
     ])
 
@@ -178,6 +195,7 @@ describe('lib/data', () => {
         secretaria_id: 2,
         secretaria_nome: 'Saúde',
         indicadores: [],
+        escalas: [],
       },
     ])
     expect(prismaMock.projeto.findMany).toHaveBeenCalledWith(expect.objectContaining({
