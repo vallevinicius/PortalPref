@@ -47,6 +47,8 @@ model Projeto {
   secretariaId Int       @map("secretaria_id")
   nome        String     @db.VarChar(255)
   descricao   String?    @db.Text
+  responsavelNome      String? @map("responsavel_nome") @db.VarChar(255)
+  responsavelTelefone  String? @map("responsavel_telefone") @db.VarChar(30)
   createdBy   Int?       @map("created_by")
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at")

@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Phone, User } from 'lucide-react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { AdminHeader } from '@/app/admin/admin-header'
@@ -39,6 +39,22 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{projeto.secretaria_nome}</p>
           <h2 className="text-xl font-semibold text-foreground">{projeto.nome}</h2>
           {projeto.descricao && <p className="mt-1 text-sm text-muted-foreground">{projeto.descricao}</p>}
+          {(projeto.responsavel_nome || projeto.responsavel_telefone) && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              {projeto.responsavel_nome && (
+                <span className="inline-flex items-center gap-1.5">
+                  <User className="size-3.5" />
+                  {projeto.responsavel_nome}
+                </span>
+              )}
+              {projeto.responsavel_telefone && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Phone className="size-3.5" />
+                  {projeto.responsavel_telefone}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <ProjetoDashboard projeto={projeto} editable={isSuperAdmin || isOwner} />

@@ -30,7 +30,13 @@ async function getAuthorizedProjeto(projetoId: number, session: SessionPayload) 
   return projeto
 }
 
-export async function createProjeto(nome: string, descricao: string, secretariaId?: number) {
+export async function createProjeto(
+  nome: string,
+  descricao: string,
+  responsavelNome: string,
+  responsavelTelefone: string,
+  secretariaId?: number,
+) {
   const session = await requireSession('super_admin', 'secretaria_admin')
   const targetSecretariaId = session.role === 'super_admin' ? secretariaId : session.secretariaId
 
@@ -51,11 +57,19 @@ export async function createProjeto(nome: string, descricao: string, secretariaI
     throw new Error('Informe o nome do projeto.')
   }
 
+  const trimmedResponsavelNome = responsavelNome.trim()
+  const trimmedResponsavelTelefone = responsavelTelefone.trim()
+  if (!trimmedResponsavelNome || !trimmedResponsavelTelefone) {
+    throw new Error('Informe o nome completo e o telefone de contato do responsável.')
+  }
+
   const projeto = await prisma.projeto.create({
     data: {
       secretariaId: targetSecretariaId,
       nome: trimmed,
       descricao: descricao.trim() || null,
+      responsavelNome: trimmedResponsavelNome,
+      responsavelTelefone: trimmedResponsavelTelefone,
       createdBy: session.userId,
     },
   })

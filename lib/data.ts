@@ -39,6 +39,8 @@ export interface Projeto {
   id: number
   nome: string
   descricao: string | null
+  responsavel_nome: string | null
+  responsavel_telefone: string | null
   secretaria_id: number
   secretaria_nome: string
   indicadores: Indicador[]
@@ -69,6 +71,8 @@ function mapProjeto(projeto: {
   id: number
   nome: string
   descricao: string | null
+  responsavelNome: string | null
+  responsavelTelefone: string | null
   secretariaId: number
   secretaria: { id: number; nome: string }
   indicadores: Array<{
@@ -89,6 +93,8 @@ function mapProjeto(projeto: {
     id: projeto.id,
     nome: projeto.nome,
     descricao: projeto.descricao,
+    responsavel_nome: projeto.responsavelNome,
+    responsavel_telefone: projeto.responsavelTelefone,
     secretaria_id: projeto.secretariaId,
     secretaria_nome: projeto.secretaria.nome,
     indicadores: projeto.indicadores.map(mapIndicador),
