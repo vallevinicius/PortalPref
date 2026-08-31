@@ -26,7 +26,13 @@ async function SuperAdminDashboardData({ currentUsername }: { currentUsername: s
   const [secretarias, admins, superAdmins] = await Promise.all([getSecretarias(), getSecretariaAdmins(), getSuperAdmins()])
 
   return (
-    <SuperAdminDashboard secretarias={secretarias} admins={admins} superAdmins={superAdmins} currentUsername={currentUsername} />
+    <SuperAdminDashboard
+      secretarias={secretarias}
+      admins={admins}
+      superAdmins={superAdmins}
+      currentUsername={currentUsername}
+      bootstrapUsername={process.env.ADMIN_USERNAME ?? null}
+    />
   )
 }
 

@@ -182,10 +182,12 @@ function NovoSuperAdminDialog({
 function SuperAdminRow({
   superAdmin,
   isCurrentUser,
+  isBootstrapAdmin,
   onCredentialRevealed,
 }: {
   superAdmin: SuperAdmin
   isCurrentUser: boolean
+  isBootstrapAdmin: boolean
   onCredentialRevealed: (credential: Credential) => void
 }) {
   const router = useRouter()
@@ -193,6 +195,18 @@ function SuperAdminRow({
   const [viewPending, setViewPending] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const [confirmViewOpen, setConfirmViewOpen] = useState(false)
+
+  if (isBootstrapAdmin) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+        <span className="font-mono text-sm">
+          {superAdmin.username}
+          {isCurrentUser && <span className="ml-2 text-xs font-sans text-muted-foreground">(você)</span>}
+        </span>
+        <span className="text-xs text-muted-foreground">Senha definida pelo .env do servidor</span>
+      </div>
+    )
+  }
 
   function handleReset() {
     setResetPending(true)
@@ -259,7 +273,15 @@ function SuperAdminRow({
   )
 }
 
-function SuperAdminsSection({ superAdmins, currentUsername }: { superAdmins: SuperAdmin[]; currentUsername: string }) {
+function SuperAdminsSection({
+  superAdmins,
+  currentUsername,
+  bootstrapUsername,
+}: {
+  superAdmins: SuperAdmin[]
+  currentUsername: string
+  bootstrapUsername: string | null
+}) {
   const [createOpen, setCreateOpen] = useState(false)
   const [revealedCredential, setRevealedCredential] = useState<Credential | null>(null)
 
@@ -287,6 +309,7 @@ function SuperAdminsSection({ superAdmins, currentUsername }: { superAdmins: Sup
               key={superAdmin.id}
               superAdmin={superAdmin}
               isCurrentUser={superAdmin.username === currentUsername}
+              isBootstrapAdmin={bootstrapUsername !== null && superAdmin.username === bootstrapUsername}
               onCredentialRevealed={setRevealedCredential}
             />
           ))}
@@ -301,11 +324,13 @@ export function SuperAdminDashboard({
   admins,
   superAdmins,
   currentUsername,
+  bootstrapUsername,
 }: {
   secretarias: Secretaria[]
   admins: SecretariaAdmin[]
   superAdmins: SuperAdmin[]
   currentUsername: string
+  bootstrapUsername: string | null
 }) {
   const [createOpen, setCreateOpen] = useState(false)
 
@@ -335,7 +360,7 @@ export function SuperAdminDashboard({
 
       <SecretariaGrid secretarias={secretarias} admins={admins} />
 
-      <SuperAdminsSection superAdmins={superAdmins} currentUsername={currentUsername} />
+      <SuperAdminsSection superAdmins={superAdmins} currentUsername={currentUsername} bootstrapUsername={bootstrapUsername} />
     </div>
   )
 }

@@ -15,6 +15,9 @@ async function main() {
     throw new Error('Defina ADMIN_USERNAME e ADMIN_PASSWORD no .env antes de rodar o seed.')
   }
 
+  // O login do admin supremo compara a senha direto com ADMIN_PASSWORD do .env
+  // (veja lib/bootstrap-admin.ts) — este hash só existe para satisfazer a coluna
+  // obrigatória do banco e não é mais usado para autenticar.
   const passwordHash = await bcrypt.hash(password, 12)
 
   await prisma.user.upsert({

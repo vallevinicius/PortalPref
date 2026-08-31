@@ -5,11 +5,19 @@ import { UserRole } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { recordAuditLog } from '@/lib/audit-log'
 import { requireSession } from '@/lib/auth'
+import { isBootstrapAdminUsername, verifyBootstrapAdminPassword } from '@/lib/bootstrap-admin'
 import { decryptSecret, encryptSecret } from '@/lib/crypto'
 import { generateRandomPassword } from '@/lib/password'
 import { prisma } from '@/lib/prisma'
 
-async function verifyOwnPassword(userId: number, confirmPassword: string) {
+async function verifyOwnPassword(userId: number, username: string, confirmPassword: string) {
+  if (isBootstrapAdminUsername(username)) {
+    if (!verifyBootstrapAdminPassword(confirmPassword)) {
+      throw new Error('Senha incorreta.')
+    }
+    return
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { passwordHash: true },
@@ -114,7 +122,7 @@ export async function resetSecretariaUserPassword(userId: number) {
 
 export async function getSecretariaUserPassword(userId: number, confirmPassword: string) {
   const session = await requireSession('super_admin')
-  await verifyOwnPassword(session.userId, confirmPassword)
+  await verifyOwnPassword(session.userId, session.username, confirmPassword)
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
@@ -183,11 +191,15 @@ export async function resetSuperAdminPassword(userId: number) {
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: { id: true, role: true, username: true },
   })
 
   if (!target || target.role !== UserRole.super_admin) {
     throw new Error('Usuário não encontrado ou não é uma conta de administrador supremo.')
+  }
+
+  if (isBootstrapAdminUsername(target.username)) {
+    throw new Error('A senha deste usuário é definida pelo arquivo .env do servidor e não pode ser alterada por aqui.')
   }
 
   const password = generateRandomPassword()
@@ -218,15 +230,19 @@ export async function resetSuperAdminPassword(userId: number) {
 
 export async function getSuperAdminPassword(userId: number, confirmPassword: string) {
   const session = await requireSession('super_admin')
-  await verifyOwnPassword(session.userId, confirmPassword)
+  await verifyOwnPassword(session.userId, session.username, confirmPassword)
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true, passwordEncrypted: true },
+    select: { id: true, role: true, username: true, passwordEncrypted: true },
   })
 
   if (!target || target.role !== UserRole.super_admin) {
     throw new Error('Usuário não encontrado ou não é uma conta de administrador supremo.')
+  }
+
+  if (isBootstrapAdminUsername(target.username)) {
+    throw new Error('A senha deste usuário é definida pelo arquivo .env do servidor e não pode ser vista por aqui.')
   }
 
   if (!target.passwordEncrypted) {

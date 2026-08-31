@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
 import { createSessionToken, setSessionCookie } from '@/lib/auth'
+import { isBootstrapAdminUsername, verifyBootstrapAdminPassword } from '@/lib/bootstrap-admin'
 import { clearLoginFailures, getLoginClientIdentifier, getLoginThrottleStatus, registerFailedLogin } from '@/lib/login-throttle'
 import { prisma } from '@/lib/prisma'
 
@@ -35,7 +36,9 @@ export async function POST(request: Request) {
     },
   })
 
-  const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH)
+  const passwordMatches = isBootstrapAdminUsername(username)
+    ? verifyBootstrapAdminPassword(password)
+    : await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH)
 
   if (!user || !passwordMatches) {
     await registerFailedLogin(username, clientIdentifier)
