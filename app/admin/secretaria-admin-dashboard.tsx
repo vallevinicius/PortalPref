@@ -7,8 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { createProjeto } from '@/lib/actions/projetos'
 import type { Projeto } from '@/lib/data'
+import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
 import { ProjetoCardGrid } from './projeto-card-grid'
 
 function formatTelefone(value: string) {
@@ -26,17 +34,26 @@ export function NovoProjetoForm({ secretariaId }: { secretariaId?: number }) {
   const [descricao, setDescricao] = useState('')
   const [responsavelNome, setResponsavelNome] = useState('')
   const [responsavelTelefone, setResponsavelTelefone] = useState('')
+  const [prazoAtualizacaoDias, setPrazoAtualizacaoDias] = useState('30')
   const [isPending, startTransition] = useTransition()
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createProjeto(nome, descricao, responsavelNome, responsavelTelefone, secretariaId)
+        await createProjeto(
+          nome,
+          descricao,
+          responsavelNome,
+          responsavelTelefone,
+          Number(prazoAtualizacaoDias),
+          secretariaId,
+        )
         setNome('')
         setDescricao('')
         setResponsavelNome('')
         setResponsavelTelefone('')
+        setPrazoAtualizacaoDias('30')
         toast.success('Projeto criado.')
         router.refresh()
       } catch (err) {
@@ -91,6 +108,23 @@ export function NovoProjetoForm({ secretariaId }: { secretariaId?: number }) {
             maxLength={15}
             required
           />
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor={`novo-projeto-prazo-${secretariaId ?? 'propria'}`}>Prazo de atualização</Label>
+          <Select value={prazoAtualizacaoDias} onValueChange={(value) => setPrazoAtualizacaoDias(value ?? '30')}>
+            <SelectTrigger id={`novo-projeto-prazo-${secretariaId ?? 'propria'}`} className="w-full">
+              <SelectValue>
+                {(value: string | null) => PRAZO_PRESETS.find((preset) => String(preset.dias) === value)?.label ?? 'Selecione'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {PRAZO_PRESETS.map((preset) => (
+                <SelectItem key={preset.dias} value={String(preset.dias)}>
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <Button type="submit" disabled={isPending}>
           {isPending ? 'Criando...' : 'Novo projeto'}

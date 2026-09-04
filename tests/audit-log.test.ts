@@ -106,7 +106,7 @@ describe('consulta protegida do registro de auditoria', () => {
     expect(prismaMock.auditLog.create).not.toHaveBeenCalled()
     expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith({
       where: {
-        action: { notIn: ['auth.login', 'auth.logout', 'audit_log.view', 'demo.seed'] },
+        action: { notIn: ['auth.login', 'auth.logout', 'audit_log.view'] },
         AND: [{ action: 'project.create' }],
         entityType: 'project',
         actorUserId: 1,
@@ -149,7 +149,7 @@ describe('consulta protegida do registro de auditoria', () => {
     await getAuditLogs({ page: 0, pageSize: 500, entityType: 'invalid' as never, actorUserId: -2 })
 
     expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { action: { notIn: ['auth.login', 'auth.logout', 'audit_log.view', 'demo.seed'] } },
+      where: { action: { notIn: ['auth.login', 'auth.logout', 'audit_log.view'] } },
       skip: 0,
       take: 100,
     }))

@@ -55,7 +55,7 @@ describe('ações de projetos', () => {
   })
 
   it('cria projeto com texto normalizado e valores vazios como null', async () => {
-    await createProjeto('  Projeto novo  ', '   ', '  Fulana de Tal  ', '  (22) 90000-0000  ')
+    await createProjeto('  Projeto novo  ', '   ', '  Fulana de Tal  ', '  (22) 90000-0000  ', 30)
 
     expect(prismaMock.projeto.create).toHaveBeenCalledWith({
       data: {
@@ -64,6 +64,7 @@ describe('ações de projetos', () => {
         descricao: null,
         responsavelNome: 'Fulana de Tal',
         responsavelTelefone: '(22) 90000-0000',
+        prazoAtualizacaoDias: 30,
         createdBy: 5,
       },
     })
@@ -71,16 +72,26 @@ describe('ações de projetos', () => {
   })
 
   it('rejeita projeto sem nome antes de acessar o Prisma', async () => {
-    await expect(createProjeto('   ', 'Descrição', 'Fulana', '99999-0000')).rejects.toThrow('Informe o nome do projeto.')
+    await expect(createProjeto('   ', 'Descrição', 'Fulana', '99999-0000', 30)).rejects.toThrow('Informe o nome do projeto.')
     expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
 
   it('rejeita projeto sem responsável ou telefone', async () => {
-    await expect(createProjeto('Projeto', '', '', '99999-0000')).rejects.toThrow(
+    await expect(createProjeto('Projeto', '', '', '99999-0000', 30)).rejects.toThrow(
       'Informe o nome completo e o telefone de contato do responsável.',
     )
-    await expect(createProjeto('Projeto', '', 'Fulana', '   ')).rejects.toThrow(
+    await expect(createProjeto('Projeto', '', 'Fulana', '   ', 30)).rejects.toThrow(
       'Informe o nome completo e o telefone de contato do responsável.',
+    )
+    expect(prismaMock.projeto.create).not.toHaveBeenCalled()
+  })
+
+  it('rejeita prazo de atualização inválido', async () => {
+    await expect(createProjeto('Projeto', '', 'Fulana', '99999-0000', 0)).rejects.toThrow(
+      'Informe de quanto em quanto tempo (em dias) o projeto precisa ser atualizado.',
+    )
+    await expect(createProjeto('Projeto', '', 'Fulana', '99999-0000', 1.5)).rejects.toThrow(
+      'Informe de quanto em quanto tempo (em dias) o projeto precisa ser atualizado.',
     )
     expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
@@ -88,7 +99,7 @@ describe('ações de projetos', () => {
   it('rejeita sessão de secretaria sem secretaria vinculada', async () => {
     requireSessionMock.mockResolvedValue({ userId: 5, role: 'secretaria_admin', secretariaId: null })
 
-    await expect(createProjeto('Projeto', '', 'Fulana', '99999-0000')).rejects.toThrow('Sua conta não está vinculada a uma secretaria.')
+    await expect(createProjeto('Projeto', '', 'Fulana', '99999-0000', 30)).rejects.toThrow('Sua conta não está vinculada a uma secretaria.')
     expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
 
@@ -158,6 +169,6 @@ describe('contrato compartilhado de autorização', () => {
 
     await createIndicador(20, 'Atendimentos', 10, '', '2026-01-01')
 
-    expect(requireSessionMock).toHaveBeenCalledWith('super_admin', 'secretaria_admin')
+    expect(requireSessionMock).toHaveBeenCalledWith('super_admin', 'secretaria_admin', 'projeto_admin')
   })
 })

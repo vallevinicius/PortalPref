@@ -39,11 +39,14 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'auth.login': 'Login realizado',
   'auth.logout': 'Logout realizado',
   'user.create': 'Usuário criado',
+  'user.assign': 'Usuário designado para o projeto',
+  'user.unassign': 'Usuário removido do projeto',
   'user.password_reset': 'Senha redefinida',
   view_password: 'Senha visualizada',
   'secretaria.create': 'Secretaria criada',
   'project.create': 'Projeto criado',
   'project.update': 'Projeto atualizado',
+  'project.set_prazo': 'Prazo de atualização configurado',
   'project.delete': 'Projeto excluído',
   'indicator.create': 'Indicador criado',
   'indicator.update': 'Indicador atualizado',
@@ -51,8 +54,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'indicator.set_scale': 'Escala do gráfico configurada',
   'indicator.remove_scale': 'Escala do gráfico removida',
   'indicator.delete': 'Indicador excluído',
+  'indicator.delete_group': 'Gráfico excluído',
   'audit_log.view': 'Registro de auditoria consultado',
-  'demo.seed': 'Dados demonstrativos populados',
 }
 
 export const AUDIT_ENTITY_LABELS: Record<AuditEntityType, string> = {
@@ -64,18 +67,21 @@ export const AUDIT_ENTITY_LABELS: Record<AuditEntityType, string> = {
   audit_log: 'Registro de auditoria',
 }
 
-export const AUDIT_IGNORED_ACTIONS = ['auth.login', 'auth.logout', 'audit_log.view', 'demo.seed'] as const
+export const AUDIT_IGNORED_ACTIONS = ['auth.login', 'auth.logout', 'audit_log.view'] as const
 
 
 export const AUDIT_ACTION_DESCRIPTIONS: Record<string, string> = {
   'auth.login': 'A pessoa entrou no sistema.',
   'auth.logout': 'A pessoa encerrou a sessão.',
   'user.create': 'Um novo usuário foi cadastrado.',
+  'user.assign': 'Um usuário já existente foi designado como responsável de um projeto.',
+  'user.unassign': 'Um usuário deixou de ser responsável por um projeto.',
   'user.password_reset': 'A senha de um usuário foi redefinida.',
   view_password: 'Uma senha foi visualizada por um administrador autorizado.',
   'secretaria.create': 'Uma nova secretaria foi cadastrada.',
   'project.create': 'Um novo projeto foi criado.',
   'project.update': 'As informações de um projeto foram alteradas.',
+  'project.set_prazo': 'O prazo de atualização de um projeto foi configurado.',
   'project.delete': 'Um projeto foi excluído.',
   'indicator.create': 'Um novo indicador foi criado.',
   'indicator.update': 'As informações de um indicador foram alteradas.',
@@ -83,8 +89,8 @@ export const AUDIT_ACTION_DESCRIPTIONS: Record<string, string> = {
   'indicator.set_scale': 'A escala de classificação de um gráfico foi configurada.',
   'indicator.remove_scale': 'A escala de classificação de um gráfico foi removida.',
   'indicator.delete': 'Um indicador foi excluído.',
+  'indicator.delete_group': 'Um gráfico e todos os seus números foram excluídos.',
   'audit_log.view': 'O histórico de atividades foi consultado.',
-  'demo.seed': 'Dados demonstrativos foram inseridos no sistema.',
 }
 
 const AUDIT_DETAIL_LABELS: Record<string, string> = {
@@ -122,6 +128,7 @@ function humanizeDetailKey(key: string) {
 function roleLabel(value: unknown) {
   if (value === 'super_admin') return 'Administrador supremo'
   if (value === 'secretaria_admin') return 'Administrador de secretaria'
+  if (value === 'projeto_admin') return 'Responsável de projeto'
   return String(value)
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Gauge, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Clock, Gauge, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -37,12 +37,14 @@ import {
 import {
   createIndicador,
   deleteIndicador,
+  deleteIndicadorGrupo,
   removeIndicadorEscala,
   renameIndicadorGrupo,
   setIndicadorEscala,
 } from '@/lib/actions/indicadores'
-import { deleteProjeto } from '@/lib/actions/projetos'
+import { deleteProjeto, setPrazoAtualizacao } from '@/lib/actions/projetos'
 import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
+import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
 
 const LINE_COLOR = '#006e6d'
 const GRID_COLOR = '#e1e0d9'
@@ -151,7 +153,7 @@ function BarValueLabel(props: Record<string, unknown> & { unidade: string | null
   )
 }
 
-type RangeKey = 'dias' | 'semanas' | 'mes' | '6meses' | '1ano'
+type RangeKey = 'dias' | 'semanas' | 'mes' | '6meses' | '1ano' | 'total'
 
 const RANGE_PRESETS: { key: RangeKey; label: string }[] = [
   { key: 'dias', label: 'Dias' },
@@ -159,6 +161,7 @@ const RANGE_PRESETS: { key: RangeKey; label: string }[] = [
   { key: 'mes', label: 'Mês' },
   { key: '6meses', label: '6 Meses' },
   { key: '1ano', label: '1 Ano' },
+  { key: 'total', label: 'Total' },
 ]
 
 function pontoDate(ponto: Indicador) {
@@ -169,7 +172,7 @@ function formatDiaMes(data: Date) {
   return `${String(data.getDate()).padStart(2, '0')}/${String(data.getMonth() + 1).padStart(2, '0')}`
 }
 
-function buildBucketedData(pontos: Indicador[], range: RangeKey): Bucket[] {
+function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: number): Bucket[] {
   const hoje = new Date()
   hoje.setHours(0, 0, 0, 0)
 
@@ -217,7 +220,44 @@ function buildBucketedData(pontos: Indicador[], range: RangeKey): Bucket[] {
     })
   }
 
-  const numMeses = range === '6meses' ? 6 : 12
+  if (range === '1ano') {
+    return MESES.map((mes, indiceMes) => {
+      const pontosNoMes = pontos.filter((ponto) => {
+        const data = pontoDate(ponto)
+        return data.getFullYear() === anoReferencia && data.getMonth() === indiceMes
+      })
+      if (pontosNoMes.length === 0) {
+        return { label: mes, valor: null, data_referencia: null }
+      }
+      const total = pontosNoMes.reduce((soma, ponto) => soma + ponto.valor, 0)
+      return {
+        label: mes,
+        valor: total,
+        data_referencia: pontosNoMes[pontosNoMes.length - 1].data_referencia,
+      }
+    })
+  }
+
+  if (range === 'total') {
+    const anos = pontos.map((ponto) => pontoDate(ponto).getFullYear())
+    const anoMinimo = Math.min(...anos)
+    const anoMaximo = Math.max(...anos)
+    return Array.from({ length: anoMaximo - anoMinimo + 1 }, (_, indice) => {
+      const anoBucket = anoMinimo + indice
+      const pontosNoAno = pontos.filter((ponto) => pontoDate(ponto).getFullYear() === anoBucket)
+      if (pontosNoAno.length === 0) {
+        return { label: String(anoBucket), valor: null, data_referencia: null }
+      }
+      const total = pontosNoAno.reduce((soma, ponto) => soma + ponto.valor, 0)
+      return {
+        label: String(anoBucket),
+        valor: total,
+        data_referencia: pontosNoAno[pontosNoAno.length - 1].data_referencia,
+      }
+    })
+  }
+
+  const numMeses = 6
   return Array.from({ length: numMeses }, (_, indice) => {
     const deslocamento = numMeses - 1 - indice
     const refAno = hoje.getFullYear()
@@ -262,6 +302,20 @@ function RangeSwitcher({ range, onChange }: { range: RangeKey; onChange: (proxim
   )
 }
 
+function YearSwitcher({ ano, onChange }: { ano: number; onChange: (proximoAno: number) => void }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(ano - 1)} aria-label="Ano anterior">
+        <ChevronLeft className="size-4" />
+      </Button>
+      <span className="w-10 text-center text-sm font-medium text-foreground">{ano}</span>
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(ano + 1)} aria-label="Próximo ano">
+        <ChevronRight className="size-4" />
+      </Button>
+    </div>
+  )
+}
+
 function IndicadorChart({
   titulo,
   pontos,
@@ -276,13 +330,17 @@ function IndicadorChart({
   escala: IndicadorEscala | undefined
 }) {
   const unidade = pontos[0]?.unidade ?? null
-  const total = pontos.reduce((soma, ponto) => soma + ponto.valor, 0)
   const primeiro = pontos[0].valor
   const ultimo = pontos[pontos.length - 1].valor
   const delta = ultimo - primeiro
   const deltaPct = primeiro !== 0 ? (delta / Math.abs(primeiro)) * 100 : null
   const [range, setRange] = useState<RangeKey>('1ano')
-  const dadosBucket = useMemo(() => buildBucketedData(pontos, range), [pontos, range])
+  const [ano, setAno] = useState(() => new Date().getFullYear())
+  const dadosBucket = useMemo(() => buildBucketedData(pontos, range, ano), [pontos, range, ano])
+  const totalPeriodo = useMemo(
+    () => dadosBucket.reduce((soma, bucket) => soma + (bucket.valor ?? 0), 0),
+    [dadosBucket],
+  )
   const tickInterval = dadosBucket.length > 15 ? Math.ceil(dadosBucket.length / 10) - 1 : 0
 
   return (
@@ -292,15 +350,17 @@ function IndicadorChart({
           <p className="text-sm font-medium text-foreground">{titulo}</p>
           {editable && <RenomearGraficoButton projetoId={projetoId} tituloAtual={titulo} />}
           {editable && <EscalaConfigButton projetoId={projetoId} titulo={titulo} escala={escala} />}
+          {editable && <DeleteGraficoButton projetoId={projetoId} titulo={titulo} />}
         </div>
         <DeltaBadge delta={delta} deltaPct={deltaPct} />
       </div>
       <div className="mb-2 flex items-end justify-between gap-2">
-        <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValor(total, unidade)}</p>
-        {escala && <EscalaBadge valor={total} escala={escala} />}
+        <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValor(totalPeriodo, unidade)}</p>
+        {escala && <EscalaBadge valor={totalPeriodo} escala={escala} />}
       </div>
-      <div className="mb-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <RangeSwitcher range={range} onChange={setRange} />
+        {range === '1ano' && <YearSwitcher ano={ano} onChange={setAno} />}
       </div>
       <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
@@ -406,7 +466,9 @@ function EscalaConfigButton({
               <Label htmlFor="escala-direcao">Direção</Label>
               <Select value={direcao} onValueChange={(value) => setDirecao(value as 'melhor' | 'pior')}>
                 <SelectTrigger id="escala-direcao" className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {(value: string | null) => (value === 'pior' ? 'Quanto maior, pior' : 'Quanto maior, melhor')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="melhor">Quanto maior, melhor</SelectItem>
@@ -628,17 +690,61 @@ function RenomearGraficoButton({ projetoId, tituloAtual }: { projetoId: number; 
   )
 }
 
-const VALORES_POR_PAGINA = 5
-
-function IndicadoresTable({ indicadores, editable }: { indicadores: Indicador[]; editable: boolean }) {
+function DeleteGraficoButton({ projetoId, titulo }: { projetoId: number; titulo: string }) {
   const router = useRouter()
+  const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-  const [pagina, setPagina] = useState(1)
 
-  function handleDelete(id: number) {
+  function handleDelete() {
     startTransition(async () => {
       try {
-        await deleteIndicador(id)
+        await deleteIndicadorGrupo(projetoId, titulo)
+        setOpen(false)
+        toast.success('Gráfico excluído.')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível excluir o gráfico.')
+      }
+    })
+  }
+
+  return (
+    <>
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => setOpen(true)} aria-label="Excluir gráfico">
+        <Trash2 className="size-3.5" />
+      </Button>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir gráfico?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso vai excluir &ldquo;{titulo}&rdquo; e todos os números lançados nele. Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isPending}>
+              {isPending ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
+const VALORES_POR_PAGINA = 5
+
+function DeleteIndicadorButton({ indicador }: { indicador: Indicador }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  function handleDelete() {
+    startTransition(async () => {
+      try {
+        await deleteIndicador(indicador.id)
+        setOpen(false)
         toast.success('Número removido.')
         router.refresh()
       } catch (err) {
@@ -646,6 +752,35 @@ function IndicadoresTable({ indicadores, editable }: { indicadores: Indicador[];
       }
     })
   }
+
+  return (
+    <>
+      <Button variant="ghost" size="icon-sm" onClick={() => setOpen(true)} aria-label="Excluir número">
+        <Trash2 className="size-3.5" />
+      </Button>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir este número?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso vai excluir o valor &ldquo;{formatValor(indicador.valor, indicador.unidade)}&rdquo; de{' '}
+              {formatDataLonga(indicador.data_referencia)} do gráfico &ldquo;{indicador.titulo}&rdquo;. Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isPending}>
+              {isPending ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
+function IndicadoresTable({ indicadores, editable }: { indicadores: Indicador[]; editable: boolean }) {
+  const [pagina, setPagina] = useState(1)
 
   if (indicadores.length === 0) {
     return <p className="text-sm text-muted-foreground">Nenhum número lançado ainda.</p>
@@ -677,9 +812,7 @@ function IndicadoresTable({ indicadores, editable }: { indicadores: Indicador[];
                 <td className="px-3 py-2">{formatDataLonga(indicador.data_referencia)}</td>
                 {editable && (
                   <td className="px-3 py-2 text-right">
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(indicador.id)} disabled={isPending} aria-label="Excluir número">
-                      <Trash2 className="size-3.5" />
-                    </Button>
+                    <DeleteIndicadorButton indicador={indicador} />
                   </td>
                 )}
               </tr>
@@ -760,7 +893,84 @@ function DeleteProjetoButton({ projeto }: { projeto: Projeto }) {
   )
 }
 
-export function ProjetoDashboard({ projeto, editable }: { projeto: Projeto; editable: boolean }) {
+export function PrazoAtualizacaoButton({ projetoId, prazoAtual }: { projetoId: number; prazoAtual: number | null }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [prazo, setPrazo] = useState(prazoAtual !== null ? String(prazoAtual) : '30')
+  const [isPending, startTransition] = useTransition()
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) setPrazo(prazoAtual !== null ? String(prazoAtual) : '30')
+    setOpen(nextOpen)
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    startTransition(async () => {
+      try {
+        await setPrazoAtualizacao(projetoId, Number(prazo))
+        setOpen(false)
+        toast.success('Prazo de atualização configurado.')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível configurar o prazo.')
+      }
+    })
+  }
+
+  return (
+    <>
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => handleOpenChange(true)} aria-label="Configurar prazo de atualização">
+        <Clock className="size-3.5" />
+      </Button>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Prazo de atualização</DialogTitle>
+            <DialogDescription>
+              De quanto em quanto tempo (em dias) esse projeto precisa receber um número novo. Se passar do prazo, um alerta aparece
+              para o responsável e para a prefeita.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="prazo-atualizacao-dias">Prazo</Label>
+              <Select value={prazo} onValueChange={(value) => setPrazo(value ?? '30')}>
+                <SelectTrigger id="prazo-atualizacao-dias" className="w-full" autoFocus>
+                  <SelectValue>
+                    {(value: string | null) => PRAZO_PRESETS.find((preset) => String(preset.dias) === value)?.label ?? 'Selecione'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {PRAZO_PRESETS.map((preset) => (
+                    <SelectItem key={preset.dias} value={String(preset.dias)}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+export function ProjetoDashboard({
+  projeto,
+  editable,
+  canDeleteProject = editable,
+}: {
+  projeto: Projeto
+  editable: boolean
+  canDeleteProject?: boolean
+}) {
   const grupos = useMemo(() => {
     const byTitulo = new Map<string, Indicador[]>()
     for (const indicador of projeto.indicadores) {
@@ -809,7 +1019,7 @@ export function ProjetoDashboard({ projeto, editable }: { projeto: Projeto; edit
         <IndicadoresTable indicadores={projeto.indicadores} editable={editable} />
       </div>
 
-      {editable && (
+      {canDeleteProject && (
         <div className="flex flex-col gap-3">
           <DeleteProjetoButton projeto={projeto} />
         </div>

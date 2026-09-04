@@ -20,6 +20,18 @@ export interface SuperAdmin {
   username: string
 }
 
+export interface ProjetoAdmin {
+  id: number
+  username: string
+  projeto_id: number
+}
+
+export interface AssignableProjetoUser {
+  id: number
+  username: string
+  projetos_atuais: string[]
+}
+
 export interface Indicador {
   id: number
   titulo: string
@@ -35,12 +47,23 @@ export interface IndicadorEscala {
   crescente_melhor: boolean
 }
 
+export interface ProjetoResumo {
+  id: number
+  nome: string
+  secretaria_id: number
+  secretaria_nome: string
+  prazo_atualizacao_dias: number | null
+  ultima_atualizacao: string | null
+}
+
 export interface Projeto {
   id: number
   nome: string
   descricao: string | null
   responsavel_nome: string | null
   responsavel_telefone: string | null
+  prazo_atualizacao_dias: number | null
+  ultima_atualizacao: string | null
   secretaria_id: number
   secretaria_nome: string
   indicadores: Indicador[]
@@ -73,6 +96,7 @@ function mapProjeto(projeto: {
   descricao: string | null
   responsavelNome: string | null
   responsavelTelefone: string | null
+  prazoAtualizacaoDias: number | null
   secretariaId: number
   secretaria: { id: number; nome: string }
   indicadores: Array<{
@@ -89,15 +113,18 @@ function mapProjeto(projeto: {
     crescenteMelhor: boolean
   }>
 }): Projeto {
+  const indicadores = projeto.indicadores.map(mapIndicador)
   return {
     id: projeto.id,
     nome: projeto.nome,
     descricao: projeto.descricao,
     responsavel_nome: projeto.responsavelNome,
     responsavel_telefone: projeto.responsavelTelefone,
+    prazo_atualizacao_dias: projeto.prazoAtualizacaoDias,
+    ultima_atualizacao: indicadores.length > 0 ? indicadores[indicadores.length - 1].data_referencia : null,
     secretaria_id: projeto.secretariaId,
     secretaria_nome: projeto.secretaria.nome,
-    indicadores: projeto.indicadores.map(mapIndicador),
+    indicadores,
     escalas: projeto.indicadorEscalas.map((escala) => ({
       titulo: escala.titulo,
       valor_minimo: Number(escala.valorMinimo),
@@ -174,6 +201,58 @@ export async function getSecretariaAdminBySecretariaId(secretariaId: number): Pr
   }
 }
 
+export async function getProjetoAdminByProjetoId(projetoId: number): Promise<ProjetoAdmin | null> {
+  const link = await prisma.projetoResponsavel.findFirst({
+    where: { projetoId },
+    orderBy: { createdAt: 'asc' },
+    select: { user: { select: { id: true, username: true } } },
+  })
+
+  if (!link) return null
+
+  return {
+    id: link.user.id,
+    username: link.user.username,
+    projeto_id: projetoId,
+  }
+}
+
+export async function getAssignableProjetoUsers(secretariaId: number): Promise<AssignableProjetoUser[]> {
+  const users = await prisma.user.findMany({
+    where: {
+      role: UserRole.projeto_admin,
+      projetosResponsavel: { every: { projeto: { secretariaId } } },
+    },
+    orderBy: { username: 'asc' },
+    select: {
+      id: true,
+      username: true,
+      projetosResponsavel: {
+        orderBy: { createdAt: 'asc' },
+        select: { projeto: { select: { nome: true } } },
+      },
+    },
+  })
+
+  return users.map((user) => ({
+    id: user.id,
+    username: user.username,
+    projetos_atuais: user.projetosResponsavel.map((link) => link.projeto.nome),
+  }))
+}
+
+export async function getProjetosPorIds(ids: number[]): Promise<Projeto[]> {
+  if (ids.length === 0) return []
+
+  const projetos = await prisma.projeto.findMany({
+    where: { id: { in: ids } },
+    orderBy: { nome: 'asc' },
+    include: projetoRelations,
+  })
+
+  return projetos.map(mapProjeto)
+}
+
 export async function getSecretarias(): Promise<Secretaria[]> {
   const secretarias = await prisma.secretaria.findMany({
     orderBy: { nome: 'asc' },
@@ -243,4 +322,31 @@ export async function getProjetosComIndicadores(secretariaId: number): Promise<P
   })
 
   return projetos.map(mapProjeto)
+}
+
+export async function getProjetosResumo(): Promise<ProjetoResumo[]> {
+  const projetos = await prisma.projeto.findMany({
+    orderBy: { nome: 'asc' },
+    select: {
+      id: true,
+      nome: true,
+      secretariaId: true,
+      secretaria: { select: { nome: true } },
+      prazoAtualizacaoDias: true,
+      indicadores: {
+        orderBy: { dataReferencia: 'desc' },
+        take: 1,
+        select: { dataReferencia: true },
+      },
+    },
+  })
+
+  return projetos.map((projeto) => ({
+    id: projeto.id,
+    nome: projeto.nome,
+    secretaria_id: projeto.secretariaId,
+    secretaria_nome: projeto.secretaria.nome,
+    prazo_atualizacao_dias: projeto.prazoAtualizacaoDias,
+    ultima_atualizacao: projeto.indicadores[0] ? formatDate(projeto.indicadores[0].dataReferencia) : null,
+  }))
 }

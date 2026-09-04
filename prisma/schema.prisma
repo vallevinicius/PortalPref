@@ -10,6 +10,7 @@ datasource db {
 enum UserRole {
   super_admin
   secretaria_admin
+  projeto_admin
 }
 
 model Secretaria {
@@ -33,6 +34,7 @@ model User {
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at")
   secretaria       Secretaria? @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  projetosResponsavel ProjetoResponsavel[]
   projetosCriados  Projeto[]  @relation("ProjectCreator")
   indicadoresCriados Indicador[] @relation("IndicatorCreator")
   auditoriasComoAtor AuditLog[] @relation("AuditActor")
@@ -49,6 +51,7 @@ model Projeto {
   descricao   String?    @db.Text
   responsavelNome      String? @map("responsavel_nome") @db.VarChar(255)
   responsavelTelefone  String? @map("responsavel_telefone") @db.VarChar(30)
+  prazoAtualizacaoDias Int?    @map("prazo_atualizacao_dias")
   createdBy   Int?       @map("created_by")
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at")
@@ -56,11 +59,25 @@ model Projeto {
   criador     User?      @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   indicadores Indicador[]
   indicadorEscalas IndicadorEscala[]
+  responsaveis ProjetoResponsavel[]
 
   @@unique([secretariaId, nome], map: "uq_projetos_secretaria_nome")
   @@index([secretariaId])
   @@index([createdBy])
   @@map("projetos")
+}
+
+model ProjetoResponsavel {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  projetoId Int      @map("projeto_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projeto   Projeto  @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projetoId], map: "uq_projeto_responsaveis_user_projeto")
+  @@index([projetoId])
+  @@map("projeto_responsaveis")
 }
 
 model Indicador {

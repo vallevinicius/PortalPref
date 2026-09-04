@@ -13,6 +13,7 @@ const {
   bcryptMock: { compare: vi.fn(), hashSync: vi.fn().mockReturnValue('dummy-hash') },
   prismaMock: {
     user: { findUnique: vi.fn() },
+    projetoResponsavel: { findMany: vi.fn() },
   },
   createSessionTokenMock: vi.fn(),
   setSessionCookieMock: vi.fn(),
@@ -126,7 +127,35 @@ describe('POST /api/auth/login', () => {
       username: 'saude-admin',
       role: 'secretaria_admin',
       secretariaId: 10,
+      projetoIds: [],
     })
     expect(setSessionCookieMock).toHaveBeenCalledWith('token-gerado')
+    expect(prismaMock.projetoResponsavel.findMany).not.toHaveBeenCalled()
+  })
+
+  it('busca todos os projetos vinculados ao logar como responsável de projeto', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 40,
+      username: 'joao.responsavel',
+      passwordHash: 'hash',
+      role: 'projeto_admin',
+      secretariaId: null,
+    })
+    prismaMock.projetoResponsavel.findMany.mockResolvedValue([{ projetoId: 20 }, { projetoId: 21 }])
+
+    const response = await POST(makeRequest({ username: 'joao.responsavel', password: 'secret' }))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.projetoResponsavel.findMany).toHaveBeenCalledWith({
+      where: { userId: 40 },
+      select: { projetoId: true },
+    })
+    expect(createSessionTokenMock).toHaveBeenCalledWith({
+      userId: 40,
+      username: 'joao.responsavel',
+      role: 'projeto_admin',
+      secretariaId: null,
+      projetoIds: [20, 21],
+    })
   })
 })

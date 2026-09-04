@@ -32,6 +32,13 @@ async function assertProjetoAccess(projetoId: number, session: SessionPayload) {
     return projeto
   }
 
+  if (session.role === 'projeto_admin') {
+    if (!session.projetoIds.includes(projetoId)) {
+      throw new UnauthorizedError('Você só pode gerenciar o seu próprio projeto.')
+    }
+    return projeto
+  }
+
   if (!session.secretariaId) {
     throw new UnauthorizedError('Sua conta não está vinculada a uma secretaria.')
   }
@@ -46,7 +53,7 @@ async function assertProjetoAccess(projetoId: number, session: SessionPayload) {
 async function assertIndicadorAccess(indicadorId: number, session: SessionPayload) {
   const indicador = await prisma.indicador.findUnique({
     where: { id: indicadorId },
-    select: { id: true, projeto: { select: { secretariaId: true } } },
+    select: { id: true, projetoId: true, projeto: { select: { secretariaId: true } } },
   })
 
   if (!indicador) {
@@ -54,6 +61,13 @@ async function assertIndicadorAccess(indicadorId: number, session: SessionPayloa
   }
 
   if (session.role === 'super_admin') {
+    return indicador
+  }
+
+  if (session.role === 'projeto_admin') {
+    if (!session.projetoIds.includes(indicador.projetoId)) {
+      throw new UnauthorizedError('Este indicador não pertence ao seu projeto.')
+    }
     return indicador
   }
 
@@ -87,7 +101,7 @@ export async function createIndicador(
   unidade: string,
   dataReferencia: string,
 ) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   const projeto = await assertProjetoAccess(projetoId, session)
   const validated = validateIndicador(titulo, valor, dataReferencia)
 
@@ -116,7 +130,7 @@ export async function createIndicador(
 }
 
 export async function renameIndicadorGrupo(projetoId: number, tituloAtual: string, novoTitulo: string) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   const projeto = await assertProjetoAccess(projetoId, session)
 
   const trimmed = novoTitulo.trim()
@@ -162,7 +176,7 @@ export async function updateIndicador(
   unidade: string,
   dataReferencia: string,
 ) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   const indicador = await assertIndicadorAccess(indicadorId, session)
   const validated = validateIndicador(titulo, valor, dataReferencia)
 
@@ -190,7 +204,7 @@ export async function updateIndicador(
 }
 
 export async function deleteIndicador(indicadorId: number) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   const indicador = await assertIndicadorAccess(indicadorId, session)
 
   await prisma.indicador.delete({ where: { id: indicadorId } })
@@ -208,6 +222,29 @@ export async function deleteIndicador(indicadorId: number) {
   revalidatePath(`/admin/projetos/${indicadorId}`)
 }
 
+export async function deleteIndicadorGrupo(projetoId: number, titulo: string) {
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  const projeto = await assertProjetoAccess(projetoId, session)
+
+  const result = await prisma.indicador.deleteMany({ where: { projetoId, titulo } })
+  await prisma.indicadorEscala.deleteMany({ where: { projetoId, titulo } })
+
+  if (result.count === 0) {
+    throw new Error('Gráfico não encontrado.')
+  }
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.delete_group',
+    entityType: 'indicator',
+    details: { titulo, projetoId, secretariaId: projeto.secretariaId, quantidadeRemovida: result.count },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
+}
+
 export async function setIndicadorEscala(
   projetoId: number,
   titulo: string,
@@ -215,7 +252,7 @@ export async function setIndicadorEscala(
   valorMaximo: number,
   crescenteMelhor: boolean,
 ) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   const projeto = await assertProjetoAccess(projetoId, session)
 
   if (!Number.isFinite(valorMinimo) || !Number.isFinite(valorMaximo)) {
@@ -244,7 +281,7 @@ export async function setIndicadorEscala(
 }
 
 export async function removeIndicadorEscala(projetoId: number, titulo: string) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   const projeto = await assertProjetoAccess(projetoId, session)
 
   await prisma.indicadorEscala.deleteMany({ where: { projetoId, titulo } })

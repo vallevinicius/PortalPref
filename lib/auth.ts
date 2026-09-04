@@ -4,13 +4,14 @@ import { cookies } from 'next/headers'
 export const SESSION_COOKIE = 'session'
 const SESSION_DURATION_SECONDS = 60 * 60 * 8 // 8 horas
 
-export type Role = 'super_admin' | 'secretaria_admin'
+export type Role = 'super_admin' | 'secretaria_admin' | 'projeto_admin'
 
 export type SessionPayload = {
   userId: number
   username: string
   role: Role
   secretariaId: number | null
+  projetoIds: number[]
 }
 
 function getSecretKey() {

@@ -35,6 +35,7 @@ export async function createProjeto(
   descricao: string,
   responsavelNome: string,
   responsavelTelefone: string,
+  prazoAtualizacaoDias: number,
   secretariaId?: number,
 ) {
   const session = await requireSession('super_admin', 'secretaria_admin')
@@ -63,6 +64,10 @@ export async function createProjeto(
     throw new Error('Informe o nome completo e o telefone de contato do responsável.')
   }
 
+  if (!Number.isInteger(prazoAtualizacaoDias) || prazoAtualizacaoDias <= 0) {
+    throw new Error('Informe de quanto em quanto tempo (em dias) o projeto precisa ser atualizado.')
+  }
+
   const projeto = await prisma.projeto.create({
     data: {
       secretariaId: targetSecretariaId,
@@ -70,6 +75,7 @@ export async function createProjeto(
       descricao: descricao.trim() || null,
       responsavelNome: trimmedResponsavelNome,
       responsavelTelefone: trimmedResponsavelTelefone,
+      prazoAtualizacaoDias,
       createdBy: session.userId,
     },
   })
@@ -84,6 +90,32 @@ export async function createProjeto(
 
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${targetSecretariaId}`)
+}
+
+export async function setPrazoAtualizacao(projetoId: number, prazoAtualizacaoDias: number) {
+  const session = await requireSession('super_admin', 'secretaria_admin')
+  const projeto = await getAuthorizedProjeto(projetoId, session)
+
+  if (!Number.isInteger(prazoAtualizacaoDias) || prazoAtualizacaoDias <= 0) {
+    throw new Error('Informe um número de dias válido.')
+  }
+
+  await prisma.projeto.update({
+    where: { id: projetoId },
+    data: { prazoAtualizacaoDias },
+  })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'project.set_prazo',
+    entityType: 'project',
+    entityId: projetoId,
+    details: { nome: projeto.nome, secretariaId: projeto.secretariaId, prazoAtualizacaoDias },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
 }
 
 export async function updateProjeto(projetoId: number, nome: string, descricao: string) {

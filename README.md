@@ -143,17 +143,9 @@ Depois que as migrations estiverem aplicadas, execute o seed padrão:
 npm run db:seed
 ```
 
-Esse comando cria ou atualiza **somente o super administrador** usando `ADMIN_USERNAME` e `ADMIN_PASSWORD`. Ele não cria secretarias, usuários de demonstração, projetos, indicadores nem eventos históricos de auditoria. Os comandos `db:seed-secretarias` e `db:seed-metricas` continuam separados e só devem ser executados quando você quiser explicitamente inserir dados iniciais de negócio.
+Esse comando cria ou atualiza **somente o super administrador** usando `ADMIN_USERNAME` e `ADMIN_PASSWORD`. Ele não cria secretarias, projetos, indicadores nem eventos históricos de auditoria. Os comandos `db:seed-secretarias` e `db:seed-metricas` continuam separados e só devem ser executados quando você quiser explicitamente inserir dados iniciais de negócio.
 
-O cenário demonstrativo é totalmente opt-in e não é chamado por `db:seed`, `db:setup` ou `db:setup:deploy`. Para usá-lo apenas em um banco local descartável, execute separadamente:
-
-```powershell
-npm run db:seed-demo
-```
-
-Esse comando cria seis secretarias, seis administradores de secretaria, dezoito projetos, trinta e seis indicadores e eventos de auditoria históricos. Nunca inclua `db:seed-demo` no pipeline de produção. Os usuários demo `demo-1` até `demo-6` usam a senha temporária `Demo@1234` e devem permanecer restritos a ambientes locais de demonstração.
-
-Os seeds de secretarias, métricas e demonstração são idempotentes dentro de suas próprias regras; o seed padrão do administrador pode ser executado com segurança para atualizar a senha e o papel do super administrador.
+Os seeds de secretarias e métricas são idempotentes dentro de suas próprias regras; o seed padrão do administrador pode ser executado com segurança para atualizar a senha e o papel do super administrador.
 
 ## 8. Iniciar o site em desenvolvimento
 
@@ -275,4 +267,4 @@ Use-o somente em banco descartável de desenvolvimento. Nunca execute esse coman
 
 ## 16. Estado da implementação
 
-A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reúne a correção do seed padrão com a interface amigável do registro de auditoria. O comando `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. O cenário demonstrativo continua opt-in pelo comando separado `npm run db:seed-demo`. A validação da branch alcançou **61 testes passando**, além de TypeScript, lint e build.
+A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reúne a correção do seed padrão com a interface amigável do registro de auditoria. O comando `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. A validação da branch alcançou **61 testes passando**, além de TypeScript, lint e build.

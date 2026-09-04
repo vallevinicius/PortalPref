@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
-import { getProjetosComIndicadores, getSecretariaAdmins, getSecretarias, getSuperAdmins } from '@/lib/data'
+import { getProjetosComIndicadores, getProjetosPorIds, getProjetosResumo, getSecretariaAdmins, getSecretarias, getSuperAdmins } from '@/lib/data'
 import { AdminHeader } from './admin-header'
+import { ProjetoCardGrid } from './projeto-card-grid'
 import { SecretariaAdminDashboard } from './secretaria-admin-dashboard'
 import { SuperAdminDashboard } from './super-admin-dashboard'
 
@@ -9,21 +10,51 @@ export default async function AdminPage() {
   const session = await getSession()
   if (!session) redirect('/')
 
+  if (session.role === 'projeto_admin') {
+    if (session.projetoIds.length === 0) redirect('/')
+    if (session.projetoIds.length === 1) redirect(`/admin/projetos/${session.projetoIds[0]}`)
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 p-6 sm:p-8">
-      <AdminHeader subtitle={`${session.role === 'super_admin' ? 'Painel da Prefeita' : 'Painel da Secretaria'} | ${session.username}`} />
+      <AdminHeader
+        subtitle={`${session.role === 'super_admin' ? 'Painel da Prefeita' : session.role === 'secretaria_admin' ? 'Painel da Secretaria' : 'Meus Projetos'} | ${session.username}`}
+      />
 
       {session.role === 'super_admin' ? (
         <SuperAdminDashboardData currentUsername={session.username} />
-      ) : (
+      ) : session.role === 'secretaria_admin' ? (
         <SecretariaAdminDashboardData secretariaId={session.secretariaId} />
+      ) : (
+        <MeusProjetosData projetoIds={session.projetoIds} />
       )}
     </main>
   )
 }
 
+async function MeusProjetosData({ projetoIds }: { projetoIds: number[] }) {
+  const projetos = await getProjetosPorIds(projetoIds)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2 className="text-lg font-semibold">Meus projetos</h2>
+        <p className="text-sm text-muted-foreground">
+          {projetos.length} projeto{projetos.length === 1 ? '' : 's'} sob sua responsabilidade
+        </p>
+      </div>
+      <ProjetoCardGrid projetos={projetos} />
+    </div>
+  )
+}
+
 async function SuperAdminDashboardData({ currentUsername }: { currentUsername: string }) {
-  const [secretarias, admins, superAdmins] = await Promise.all([getSecretarias(), getSecretariaAdmins(), getSuperAdmins()])
+  const [secretarias, admins, superAdmins, projetosResumo] = await Promise.all([
+    getSecretarias(),
+    getSecretariaAdmins(),
+    getSuperAdmins(),
+    getProjetosResumo(),
+  ])
 
   return (
     <SuperAdminDashboard
@@ -32,6 +63,7 @@ async function SuperAdminDashboardData({ currentUsername }: { currentUsername: s
       superAdmins={superAdmins}
       currentUsername={currentUsername}
       bootstrapUsername={process.env.ADMIN_USERNAME ?? null}
+      projetosResumo={projetosResumo}
     />
   )
 }

@@ -46,7 +46,7 @@ describe('acesso global do super administrador a projetos', () => {
   })
 
   it('permite criar projeto em qualquer secretaria informada', async () => {
-    await createProjeto('  Projeto Saúde  ', '  Descrição  ', 'Fulana de Tal', '(22) 90000-0000', 42)
+    await createProjeto('  Projeto Saúde  ', '  Descrição  ', 'Fulana de Tal', '(22) 90000-0000', 30, 42)
 
     expect(prismaMock.projeto.create).toHaveBeenCalledWith({
       data: {
@@ -55,6 +55,7 @@ describe('acesso global do super administrador a projetos', () => {
         descricao: 'Descrição',
         responsavelNome: 'Fulana de Tal',
         responsavelTelefone: '(22) 90000-0000',
+        prazoAtualizacaoDias: 30,
         createdBy: 1,
       },
     })
@@ -62,7 +63,7 @@ describe('acesso global do super administrador a projetos', () => {
   })
 
   it('exige secretaria-alvo para criação feita pelo super administrador', async () => {
-    await expect(createProjeto('Projeto', '', 'Fulana', '99999-0000')).rejects.toThrow('Informe a secretaria do projeto.')
+    await expect(createProjeto('Projeto', '', 'Fulana', '99999-0000', 30)).rejects.toThrow('Informe a secretaria do projeto.')
     expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
 
@@ -97,7 +98,7 @@ describe('restrições do administrador de secretaria', () => {
   })
 
   it('continua criando projeto apenas na própria secretaria', async () => {
-    await createProjeto('Projeto local', '', 'Fulana de Tal', '(22) 90000-0000', 10)
+    await createProjeto('Projeto local', '', 'Fulana de Tal', '(22) 90000-0000', 30, 10)
 
     expect(prismaMock.projeto.create).toHaveBeenCalledWith({
       data: {
@@ -106,13 +107,14 @@ describe('restrições do administrador de secretaria', () => {
         descricao: null,
         responsavelNome: 'Fulana de Tal',
         responsavelTelefone: '(22) 90000-0000',
+        prazoAtualizacaoDias: 30,
         createdBy: 5,
       },
     })
   })
 
   it('bloqueia tentativa de criar projeto em outra secretaria', async () => {
-    await expect(createProjeto('Projeto indevido', '', 'Fulana', '99999-0000', 99)).rejects.toBeInstanceOf(UnauthorizedErrorMock)
+    await expect(createProjeto('Projeto indevido', '', 'Fulana', '99999-0000', 30, 99)).rejects.toBeInstanceOf(UnauthorizedErrorMock)
     expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
 

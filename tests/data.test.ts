@@ -14,14 +14,21 @@ const { prismaMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    projetoResponsavel: {
+      findFirst: vi.fn(),
+    },
   },
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
 import {
+  getAssignableProjetoUsers,
+  getProjetoAdminByProjetoId,
   getProjetoComIndicadores,
   getProjetosComIndicadores,
+  getProjetosPorIds,
+  getProjetosResumo,
   getSecretariaAdminBySecretariaId,
   getSecretariaAdmins,
   getSecretariaById,
@@ -124,6 +131,9 @@ describe('lib/data', () => {
       id: 10,
       nome: 'Projeto Saúde',
       descricao: null,
+      responsavelNome: null,
+      responsavelTelefone: null,
+      prazoAtualizacaoDias: 30,
       secretariaId: 2,
       secretaria: { id: 2, nome: 'Saúde' },
       indicadores: [
@@ -149,6 +159,10 @@ describe('lib/data', () => {
       id: 10,
       nome: 'Projeto Saúde',
       descricao: null,
+      responsavel_nome: null,
+      responsavel_telefone: null,
+      prazo_atualizacao_dias: 30,
+      ultima_atualizacao: '2026-03-15',
       secretaria_id: 2,
       secretaria_nome: 'Saúde',
       indicadores: [
@@ -180,6 +194,9 @@ describe('lib/data', () => {
         id: 11,
         nome: 'Projeto A',
         descricao: 'Descrição',
+        responsavelNome: null,
+        responsavelTelefone: null,
+        prazoAtualizacaoDias: null,
         secretariaId: 2,
         secretaria: { id: 2, nome: 'Saúde' },
         indicadores: [],
@@ -192,6 +209,10 @@ describe('lib/data', () => {
         id: 11,
         nome: 'Projeto A',
         descricao: 'Descrição',
+        responsavel_nome: null,
+        responsavel_telefone: null,
+        prazo_atualizacao_dias: null,
+        ultima_atualizacao: null,
         secretaria_id: 2,
         secretaria_nome: 'Saúde',
         indicadores: [],
@@ -201,6 +222,116 @@ describe('lib/data', () => {
     expect(prismaMock.projeto.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { secretariaId: 2 },
       orderBy: { createdAt: 'desc' },
+    }))
+  })
+
+  it('resume projetos com secretaria, prazo e última atualização', async () => {
+    prismaMock.projeto.findMany.mockResolvedValue([
+      {
+        id: 30,
+        nome: 'Projeto com número',
+        secretariaId: 2,
+        secretaria: { nome: 'Saúde' },
+        prazoAtualizacaoDias: 7,
+        indicadores: [{ dataReferencia: new Date('2026-08-14T00:00:00.000Z') }],
+      },
+      {
+        id: 31,
+        nome: 'Projeto sem número',
+        secretariaId: 2,
+        secretaria: { nome: 'Saúde' },
+        prazoAtualizacaoDias: null,
+        indicadores: [],
+      },
+    ])
+
+    await expect(getProjetosResumo()).resolves.toEqual([
+      {
+        id: 30,
+        nome: 'Projeto com número',
+        secretaria_id: 2,
+        secretaria_nome: 'Saúde',
+        prazo_atualizacao_dias: 7,
+        ultima_atualizacao: '2026-08-14',
+      },
+      {
+        id: 31,
+        nome: 'Projeto sem número',
+        secretaria_id: 2,
+        secretaria_nome: 'Saúde',
+        prazo_atualizacao_dias: null,
+        ultima_atualizacao: null,
+      },
+    ])
+  })
+
+  it('filtra usuários designáveis por secretaria do projeto', async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 40, username: 'joao.responsavel', projetosResponsavel: [{ projeto: { nome: 'Projeto A' } }, { projeto: { nome: 'Projeto B' } }] },
+      { id: 41, username: 'maria.livre', projetosResponsavel: [] },
+    ])
+
+    await expect(getAssignableProjetoUsers(10)).resolves.toEqual([
+      { id: 40, username: 'joao.responsavel', projetos_atuais: ['Projeto A', 'Projeto B'] },
+      { id: 41, username: 'maria.livre', projetos_atuais: [] },
+    ])
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { role: 'projeto_admin', projetosResponsavel: { every: { projeto: { secretariaId: 10 } } } },
+    }))
+  })
+
+  it('busca o primeiro responsável cadastrado para um projeto', async () => {
+    prismaMock.projetoResponsavel.findFirst.mockResolvedValue({ user: { id: 40, username: 'joao.responsavel' } })
+
+    await expect(getProjetoAdminByProjetoId(20)).resolves.toEqual({
+      id: 40,
+      username: 'joao.responsavel',
+      projeto_id: 20,
+    })
+    expect(prismaMock.projetoResponsavel.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { projetoId: 20 },
+    }))
+
+    prismaMock.projetoResponsavel.findFirst.mockResolvedValue(null)
+    await expect(getProjetoAdminByProjetoId(21)).resolves.toBeNull()
+  })
+
+  it('busca projetos por uma lista de ids, e retorna vazio para lista vazia', async () => {
+    await expect(getProjetosPorIds([])).resolves.toEqual([])
+    expect(prismaMock.projeto.findMany).not.toHaveBeenCalled()
+
+    prismaMock.projeto.findMany.mockResolvedValue([
+      {
+        id: 20,
+        nome: 'Projeto A',
+        descricao: null,
+        responsavelNome: null,
+        responsavelTelefone: null,
+        prazoAtualizacaoDias: null,
+        secretariaId: 2,
+        secretaria: { id: 2, nome: 'Saúde' },
+        indicadores: [],
+        indicadorEscalas: [],
+      },
+    ])
+
+    await expect(getProjetosPorIds([20, 21])).resolves.toEqual([
+      {
+        id: 20,
+        nome: 'Projeto A',
+        descricao: null,
+        responsavel_nome: null,
+        responsavel_telefone: null,
+        prazo_atualizacao_dias: null,
+        ultima_atualizacao: null,
+        secretaria_id: 2,
+        secretaria_nome: 'Saúde',
+        indicadores: [],
+        escalas: [],
+      },
+    ])
+    expect(prismaMock.projeto.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: { in: [20, 21] } },
     }))
   })
 })

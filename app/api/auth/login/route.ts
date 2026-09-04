@@ -47,11 +47,21 @@ export async function POST(request: Request) {
 
   await clearLoginFailures(username, clientIdentifier)
 
+  let projetoIds: number[] = []
+  if (user.role === 'projeto_admin') {
+    const links = await prisma.projetoResponsavel.findMany({
+      where: { userId: user.id },
+      select: { projetoId: true },
+    })
+    projetoIds = links.map((link) => link.projetoId)
+  }
+
   const token = await createSessionToken({
     userId: user.id,
     username: user.username,
     role: user.role,
     secretariaId: user.secretariaId,
+    projetoIds,
   })
   await setSessionCookie(token)
 

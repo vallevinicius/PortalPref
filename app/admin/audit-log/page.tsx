@@ -30,7 +30,9 @@ function formatDateTime(value: string) {
 }
 
 function roleLabel(role: string) {
-  return role === 'super_admin' ? 'Administrador supremo' : 'Administrador de secretaria'
+  if (role === 'super_admin') return 'Administrador supremo'
+  if (role === 'projeto_admin') return 'Responsável de projeto'
+  return 'Administrador de secretaria'
 }
 
 function DetailsCell({ entry }: { entry: AuditLogEntry }) {

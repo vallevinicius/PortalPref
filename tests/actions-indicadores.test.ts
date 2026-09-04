@@ -130,3 +130,42 @@ describe('ações de indicadores', () => {
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin')
   })
 })
+
+describe('ações de indicadores para responsável de projeto (projeto_admin)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    prismaMock.indicador.create.mockResolvedValue({ id: 31, titulo: 'Atendimentos', projetoId: 20 })
+  })
+
+  it('permite criar indicador apenas no próprio projeto', async () => {
+    requireSessionMock.mockResolvedValue({ userId: 9, role: 'projeto_admin', secretariaId: null, projetoIds: [20] })
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await createIndicador(20, 'Atendimentos', 10, '', '2026-01-01')
+
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ projetoId: 20 }) }),
+    )
+  })
+
+  it('bloqueia criação de indicador em outro projeto', async () => {
+    requireSessionMock.mockResolvedValue({ userId: 9, role: 'projeto_admin', secretariaId: null, projetoIds: [20] })
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 21, secretariaId: 10 })
+
+    await expect(createIndicador(21, 'Atendimentos', 10, '', '2026-01-01')).rejects.toThrow(
+      'Você só pode gerenciar o seu próprio projeto.',
+    )
+    expect(prismaMock.indicador.create).not.toHaveBeenCalled()
+  })
+
+  it('permite excluir indicador do próprio projeto e bloqueia de outro', async () => {
+    requireSessionMock.mockResolvedValue({ userId: 9, role: 'projeto_admin', secretariaId: null, projetoIds: [20] })
+    prismaMock.indicador.findUnique.mockResolvedValue({ id: 30, projetoId: 20, projeto: { secretariaId: 10 } })
+
+    await deleteIndicador(30)
+    expect(prismaMock.indicador.delete).toHaveBeenCalledWith({ where: { id: 30 } })
+
+    prismaMock.indicador.findUnique.mockResolvedValue({ id: 32, projetoId: 21, projeto: { secretariaId: 10 } })
+    await expect(deleteIndicador(32)).rejects.toThrow('Este indicador não pertence ao seu projeto.')
+  })
+})
