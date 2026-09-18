@@ -105,6 +105,14 @@ export async function createIndicador(
   const projeto = await assertProjetoAccess(projetoId, session)
   const validated = validateIndicador(titulo, valor, dataReferencia)
 
+  // Cada "gráfico" é, por baixo dos panos, um grupo de indicadores com o mesmo título.
+  // Se já existe algum indicador com esse título neste projeto, isso aqui é só um novo
+  // número lançado no gráfico existente — não a criação de um gráfico novo.
+  const grupoJaExiste = await prisma.indicador.findFirst({
+    where: { projetoId, titulo: validated.titulo },
+    select: { id: true },
+  })
+
   const indicador = await prisma.indicador.create({
     data: {
       projetoId,
@@ -118,10 +126,16 @@ export async function createIndicador(
 
   await recordAuditLog({
     actorUserId: session.userId,
-    action: 'indicator.create',
+    action: grupoJaExiste ? 'indicator.add_value' : 'indicator.create',
     entityType: 'indicator',
     entityId: indicador.id,
-    details: { titulo: indicador.titulo, projetoId: indicador.projetoId, secretariaId: projeto.secretariaId },
+    details: {
+      titulo: indicador.titulo,
+      valor: Number(indicador.valor),
+      unidade: indicador.unidade,
+      projetoId: indicador.projetoId,
+      secretariaId: projeto.secretariaId,
+    },
   })
 
   revalidatePath('/admin')
@@ -195,7 +209,12 @@ export async function updateIndicador(
     action: 'indicator.update',
     entityType: 'indicator',
     entityId: indicadorId,
-    details: { titulo: validated.titulo, secretariaId: indicador.projeto.secretariaId },
+    details: {
+      titulo: validated.titulo,
+      valor,
+      unidade: unidade.trim() || null,
+      secretariaId: indicador.projeto.secretariaId,
+    },
   })
 
   revalidatePath('/admin')

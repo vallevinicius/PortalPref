@@ -32,6 +32,16 @@ export interface AssignableProjetoUser {
   projetos_atuais: string[]
 }
 
+export interface UsuarioResumo {
+  id: number
+  username: string
+  email: string | null
+  role: 'secretaria_admin' | 'projeto_admin'
+  secretaria_id: number | null
+  secretaria_nome: string | null
+  projetos: { id: number; nome: string }[]
+}
+
 export interface Indicador {
   id: number
   titulo: string
@@ -177,30 +187,6 @@ export async function getSecretariaById(id: number): Promise<Secretaria | null> 
   }
 }
 
-export async function getSecretariaAdminBySecretariaId(secretariaId: number): Promise<SecretariaAdmin | null> {
-  const user = await prisma.user.findFirst({
-    where: {
-      role: UserRole.secretaria_admin,
-      secretariaId,
-    },
-    select: {
-      id: true,
-      username: true,
-      secretariaId: true,
-      secretaria: { select: { nome: true } },
-    },
-  })
-
-  if (!user || user.secretariaId === null || !user.secretaria) return null
-
-  return {
-    id: user.id,
-    username: user.username,
-    secretaria_id: user.secretariaId,
-    secretaria_nome: user.secretaria.nome,
-  }
-}
-
 export async function getProjetoAdminByProjetoId(projetoId: number): Promise<ProjetoAdmin | null> {
   const link = await prisma.projetoResponsavel.findFirst({
     where: { projetoId },
@@ -303,6 +289,48 @@ export async function getSuperAdmins(): Promise<SuperAdmin[]> {
   })
 
   return users
+}
+
+// Sem secretariaId: lista todos os secretários e responsáveis de projeto (visão da prefeita).
+// Com secretariaId: lista só os responsáveis de projeto cujos projetos são todos dessa secretaria
+// (visão do secretário, que só pode gerenciar gente da própria pasta).
+export async function getAllUsers(secretariaId?: number): Promise<UsuarioResumo[]> {
+  const users = await prisma.user.findMany({
+    where:
+      secretariaId !== undefined
+        ? {
+            role: UserRole.projeto_admin,
+            projetosResponsavel: { some: {}, every: { projeto: { secretariaId } } },
+          }
+        : { role: { in: [UserRole.secretaria_admin, UserRole.projeto_admin] } },
+    orderBy: [{ username: 'asc' }],
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      role: true,
+      secretariaId: true,
+      secretaria: { select: { nome: true } },
+      projetosResponsavel: {
+        orderBy: { createdAt: 'asc' },
+        select: { projeto: { select: { id: true, nome: true, secretariaId: true, secretaria: { select: { nome: true } } } } },
+      },
+    },
+  })
+
+  return users.map((user) => {
+    const primeiroProjeto = user.projetosResponsavel[0]?.projeto ?? null
+    const ehSecretario = user.role === UserRole.secretaria_admin
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role as 'secretaria_admin' | 'projeto_admin',
+      secretaria_id: ehSecretario ? user.secretariaId : (primeiroProjeto?.secretariaId ?? null),
+      secretaria_nome: ehSecretario ? (user.secretaria?.nome ?? null) : (primeiroProjeto?.secretaria.nome ?? null),
+      projetos: user.projetosResponsavel.map((link) => ({ id: link.projeto.id, nome: link.projeto.nome })),
+    }
+  })
 }
 
 export async function getProjetoComIndicadores(projetoId: number): Promise<Projeto | null> {

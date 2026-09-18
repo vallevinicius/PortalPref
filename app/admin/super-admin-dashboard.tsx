@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, Eye, KeyRound, PieChart as PieChartIcon, Plus, ScrollText, Search, ShieldPlus } from 'lucide-react'
+import { AlertTriangle, KeyRound, Mail, PieChart as PieChartIcon, Plus, ScrollText, Search, ShieldPlus, Users, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
@@ -19,6 +19,16 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxIcon,
+  ComboboxInput,
+  ComboboxInputGroup,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,10 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ConfirmPasswordDialog, GeneratedPasswordBanner, type Credential } from './credential-components'
+import { GeneratedPasswordBanner, type Credential } from './credential-components'
 import { createSecretaria } from '@/lib/actions/secretarias'
 import { cn } from '@/lib/utils'
-import { createSuperAdmin, getSuperAdminPassword, resetSuperAdminPassword } from '@/lib/actions/users'
+import { createProjetoUser, createSecretariaUser, createSuperAdmin, enviarRedefinicaoSenha } from '@/lib/actions/users'
 import type { ProjetoResumo, Secretaria, SecretariaAdmin, SuperAdmin } from '@/lib/data'
 import { calcularStatusAtualizacao } from '@/lib/prazo-atualizacao'
 import { getSecretariaIcon } from '@/lib/secretaria-icon'
@@ -134,6 +144,246 @@ function NovaSecretariaDialog({
             className="mt-1"
           >
             {isPending ? 'Criando...' : 'Criar secretaria'}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+type Cargo = 'secretario' | 'responsavel_projeto'
+
+function SecretariaCombobox({
+  id,
+  label,
+  secretarias,
+  value,
+  onChange,
+  disabled,
+  placeholder = 'Digite para buscar...',
+}: {
+  id: string
+  label: string
+  secretarias: Secretaria[]
+  value: string
+  onChange: (value: string) => void
+  disabled?: boolean
+  placeholder?: string
+}) {
+  const nomePorId = useMemo(() => new Map(secretarias.map((s) => [String(s.id), s.nome])), [secretarias])
+  const itens = useMemo(() => secretarias.map((s) => String(s.id)), [secretarias])
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Combobox
+        items={itens}
+        value={value || null}
+        onValueChange={(next) => onChange(next ?? '')}
+        itemToStringLabel={(itemValue: string) => nomePorId.get(itemValue) ?? itemValue}
+        disabled={disabled}
+      >
+        <ComboboxInputGroup>
+          <ComboboxInput id={id} placeholder={placeholder} />
+          <ComboboxIcon />
+        </ComboboxInputGroup>
+        <ComboboxContent>
+          <ComboboxEmpty>Nenhuma secretaria encontrada.</ComboboxEmpty>
+          <ComboboxList>
+            {(itemValue: string) => (
+              <ComboboxItem key={itemValue} value={itemValue}>
+                {nomePorId.get(itemValue) ?? itemValue}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
+    </div>
+  )
+}
+
+function NovoUsuarioDialog({
+  open,
+  onOpenChange,
+  secretarias,
+  admins,
+  projetosResumo,
+  onCreated,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  secretarias: Secretaria[]
+  admins: SecretariaAdmin[]
+  projetosResumo: ProjetoResumo[]
+  onCreated: (credential: Credential) => void
+}) {
+  const router = useRouter()
+  const [cargo, setCargo] = useState<Cargo>('secretario')
+  const [secretariaFiltroId, setSecretariaFiltroId] = useState('')
+  const [alvoId, setAlvoId] = useState('')
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [isPending, startTransition] = useTransition()
+
+  const secretariasDisponiveis = useMemo(
+    () => secretarias.filter((s) => !admins.some((admin) => admin.secretaria_id === s.id)),
+    [secretarias, admins],
+  )
+
+  const projetosDaSecretaria = useMemo(
+    () => (secretariaFiltroId ? projetosResumo.filter((p) => String(p.secretaria_id) === secretariaFiltroId) : []),
+    [projetosResumo, secretariaFiltroId],
+  )
+
+  function resetForm() {
+    setCargo('secretario')
+    setSecretariaFiltroId('')
+    setAlvoId('')
+    setUsername('')
+    setEmail('')
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!alvoId) return
+    startTransition(async () => {
+      try {
+        const credential =
+          cargo === 'secretario'
+            ? await createSecretariaUser(username, email, Number(alvoId))
+            : await createProjetoUser(username, email, Number(alvoId))
+        resetForm()
+        onOpenChange(false)
+        onCreated(credential)
+        toast.success('Usuário criado.')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível criar o usuário.')
+      }
+    })
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        if (!next) resetForm()
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Novo usuário</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="novo-usuario-cargo">Cargo</Label>
+            <Select
+              value={cargo}
+              onValueChange={(value) => {
+                setCargo((value ?? 'secretario') as Cargo)
+                setSecretariaFiltroId('')
+                setAlvoId('')
+              }}
+            >
+              <SelectTrigger id="novo-usuario-cargo" className="w-full">
+                <SelectValue>{(value: string | null) => (value === 'responsavel_projeto' ? 'Responsável de projeto' : 'Secretário')}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="secretario">Secretário</SelectItem>
+                <SelectItem value="responsavel_projeto">Responsável de projeto</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {cargo === 'secretario'
+                ? 'Pode criar projetos e usuários responsáveis dentro da secretaria.'
+                : 'Só acompanha os projetos designados a ele. Não pode criar projetos nem usuários.'}
+            </p>
+          </div>
+
+          {cargo === 'secretario' ? (
+            <div className="flex flex-col gap-1.5">
+              <SecretariaCombobox
+                id="novo-usuario-secretaria"
+                label="Secretaria"
+                secretarias={secretariasDisponiveis}
+                value={alvoId}
+                onChange={setAlvoId}
+              />
+              {secretariasDisponiveis.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Todas as secretarias já têm um secretário. Para trocar o acesso de uma delas, gere uma nova senha em vez de criar outro usuário.
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              <SecretariaCombobox
+                id="novo-usuario-secretaria-filtro"
+                label="Secretaria"
+                secretarias={secretarias}
+                value={secretariaFiltroId}
+                onChange={(next) => {
+                  setSecretariaFiltroId(next)
+                  setAlvoId('')
+                }}
+              />
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="novo-usuario-projeto">Projeto</Label>
+                <Select value={alvoId} onValueChange={(value) => setAlvoId(value ?? '')} disabled={!secretariaFiltroId}>
+                  <SelectTrigger id="novo-usuario-projeto" className="w-full">
+                    <SelectValue
+                      placeholder={secretariaFiltroId ? 'Selecione o projeto' : 'Selecione a secretaria primeiro'}
+                    >
+                      {(value: string | null) => (value ? projetosDaSecretaria.find((p) => String(p.id) === value)?.nome : null)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projetosDaSecretaria.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {secretariaFiltroId && projetosDaSecretaria.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Essa secretaria ainda não tem projetos cadastrados.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="novo-usuario-nome">Nome de usuário</Label>
+            <Input
+              id="novo-usuario-nome"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Ex.: saude.admin"
+              required
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="novo-usuario-email">E-mail de acesso</Label>
+            <Input
+              id="novo-usuario-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Ex.: fulano@prefeitura.gov.br"
+              required
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={isPending || !alvoId || !username.trim() || !email.trim()}
+            className="mt-1 gap-1.5"
+          >
+            <KeyRound className="size-3.5" />
+            {isPending ? 'Criando...' : 'Criar usuário + gerar senha'}
           </Button>
         </form>
       </DialogContent>
@@ -349,18 +599,13 @@ function SuperAdminRow({
   superAdmin,
   isCurrentUser,
   isBootstrapAdmin,
-  onCredentialRevealed,
 }: {
   superAdmin: SuperAdmin
   isCurrentUser: boolean
   isBootstrapAdmin: boolean
-  onCredentialRevealed: (credential: Credential) => void
 }) {
-  const router = useRouter()
-  const [resetPending, setResetPending] = useState(false)
-  const [viewPending, setViewPending] = useState(false)
+  const [sendingReset, setSendingReset] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
-  const [confirmViewOpen, setConfirmViewOpen] = useState(false)
 
   if (isBootstrapAdmin) {
     return (
@@ -374,31 +619,17 @@ function SuperAdminRow({
     )
   }
 
-  function handleReset() {
-    setResetPending(true)
-    resetSuperAdminPassword(superAdmin.id)
-      .then((result) => {
-        onCredentialRevealed({ username: superAdmin.username, password: result.password })
-        toast.success('Nova senha gerada.')
-        router.refresh()
+  function handleSendReset() {
+    setSendingReset(true)
+    enviarRedefinicaoSenha(superAdmin.id)
+      .then(() => {
+        toast.success(`E-mail de redefinição enviado para ${superAdmin.username}.`)
+        setConfirmResetOpen(false)
       })
       .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Não foi possível gerar a nova senha.')
+        toast.error(err instanceof Error ? err.message : 'Não foi possível enviar o e-mail de redefinição.')
       })
-      .finally(() => setResetPending(false))
-  }
-
-  function handleViewPassword(confirmPassword: string) {
-    setViewPending(true)
-    getSuperAdminPassword(superAdmin.id, confirmPassword)
-      .then((result) => {
-        onCredentialRevealed({ username: superAdmin.username, password: result.password })
-        setConfirmViewOpen(false)
-      })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Não foi possível mostrar a senha.')
-      })
-      .finally(() => setViewPending(false))
+      .finally(() => setSendingReset(false))
   }
 
   return (
@@ -407,31 +638,26 @@ function SuperAdminRow({
         {superAdmin.username}
         {isCurrentUser && <span className="ml-2 text-xs font-sans text-muted-foreground">(você)</span>}
       </span>
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => setConfirmViewOpen(true)} disabled={viewPending} className="gap-1.5">
-          <Eye className="size-3.5" />
-          {viewPending ? 'Carregando...' : 'Ver senha atual'}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setConfirmResetOpen(true)} disabled={resetPending} className="gap-1.5">
-          <KeyRound className="size-3.5" />
-          {resetPending ? 'Gerando...' : 'Gerar nova senha'}
-        </Button>
-      </div>
-
-      <ConfirmPasswordDialog open={confirmViewOpen} onOpenChange={setConfirmViewOpen} onConfirm={handleViewPassword} pending={viewPending} />
+      <Button variant="outline" size="sm" onClick={() => setConfirmResetOpen(true)} disabled={sendingReset} className="gap-1.5">
+        <Mail className="size-3.5" />
+        {sendingReset ? 'Enviando...' : 'Redefinir senha por e-mail'}
+      </Button>
 
       <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Gerar nova senha?</AlertDialogTitle>
+            <AlertDialogTitle>Enviar e-mail de redefinição de senha?</AlertDialogTitle>
             <AlertDialogDescription>
-              A senha atual de &ldquo;{superAdmin.username}&rdquo; deixará de funcionar imediatamente.
-              {isCurrentUser && ' Essa é a sua própria conta — anote a nova senha antes de sair.'}
+              Vamos mandar um código de confirmação para o e-mail de &ldquo;{superAdmin.username}&rdquo;. A senha atual
+              continua funcionando até a pessoa concluir a redefinição.
+              {isCurrentUser && ' Essa é a sua própria conta.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReset}>Gerar nova senha</AlertDialogAction>
+            <AlertDialogAction onClick={handleSendReset} disabled={sendingReset}>
+              {sendingReset ? 'Enviando...' : 'Enviar e-mail'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -476,7 +702,6 @@ function SuperAdminsSection({
               superAdmin={superAdmin}
               isCurrentUser={superAdmin.username === currentUsername}
               isBootstrapAdmin={bootstrapUsername !== null && superAdmin.username === bootstrapUsername}
-              onCredentialRevealed={setRevealedCredential}
             />
           ))}
         </div>
@@ -541,6 +766,8 @@ export function SuperAdminDashboard({
   projetosResumo: ProjetoResumo[]
 }) {
   const [createOpen, setCreateOpen] = useState(false)
+  const [novoUsuarioOpen, setNovoUsuarioOpen] = useState(false)
+  const [revealedCredential, setRevealedCredential] = useState<Credential | null>(null)
   const [busca, setBusca] = useState('')
 
   const secretariasFiltradas = useMemo(() => {
@@ -565,12 +792,24 @@ export function SuperAdminDashboard({
         </div>
         <div className="flex items-center gap-2">
           <ProjetosPorSecretariaButton secretarias={secretarias} />
+          <Link href="/admin/usuarios" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
+            <Users className="size-4" />
+            Ver usuários
+          </Link>
+          <Button variant="outline" onClick={() => setNovoUsuarioOpen(true)} className="gap-1.5">
+            <UserPlus className="size-4" />
+            Novo usuário
+          </Button>
           <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
             <Plus className="size-4" />
             Nova secretaria
           </Button>
         </div>
       </div>
+
+      {revealedCredential && (
+        <GeneratedPasswordBanner credential={revealedCredential} onDismiss={() => setRevealedCredential(null)} />
+      )}
 
       <ProjetosAtrasadosAlert projetosResumo={projetosResumo} />
 
@@ -585,6 +824,15 @@ export function SuperAdminDashboard({
       </div>
 
       <NovaSecretariaDialog open={createOpen} onOpenChange={setCreateOpen} secretarias={secretarias} />
+
+      <NovoUsuarioDialog
+        open={novoUsuarioOpen}
+        onOpenChange={setNovoUsuarioOpen}
+        secretarias={secretarias}
+        admins={admins}
+        projetosResumo={projetosResumo}
+        onCreated={setRevealedCredential}
+      />
 
       <div className="flex justify-start">
         <Link href="/admin/audit-log" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>

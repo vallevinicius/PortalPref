@@ -14,7 +14,7 @@ const { prismaMock, requireSessionMock } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/auth', () => ({ requireSession: requireSessionMock }))
 
-import { getAuditDetailEntries, recordAuditLog } from '@/lib/audit-log'
+import { getAuditDetailEntries, getAuditValor, recordAuditLog } from '@/lib/audit-log'
 import { getAuditLogs } from '@/lib/actions/audit-log'
 
 describe('helper do registro de auditoria', () => {
@@ -63,19 +63,33 @@ describe('helper do registro de auditoria', () => {
     })
   })
 
-  it('converte detalhes técnicos em informações legíveis e omite campos internos', () => {
+  it('converte detalhes técnicos em informações legíveis e omite campos internos (incluindo valor/unidade, que têm coluna própria)', () => {
     expect(getAuditDetailEntries({
       nome: 'Projeto Saúde',
       secretariaId: 4,
       role: 'super_admin',
       pageSize: 25,
       seedKey: 'audit-log-demo-v1',
+      valor: 1000,
+      unidade: 'processos',
     })).toEqual([
       { label: 'Nome', value: 'Projeto Saúde' },
       { label: 'Secretaria relacionada', value: 'ID 4' },
       { label: 'Perfil de acesso', value: 'Administrador supremo' },
       { label: 'Itens por página', value: '25 itens' },
     ])
+  })
+
+  it('formata o valor lançado num indicador, com e sem unidade', () => {
+    expect(getAuditValor({ titulo: 'Processos', valor: 1000, unidade: null })).toBe('1.000')
+    expect(getAuditValor({ titulo: 'Processos', valor: 1000, unidade: 'pessoas' })).toBe('1.000 pessoas')
+  })
+
+  it('retorna null quando a atividade não tem um valor numérico associado', () => {
+    expect(getAuditValor({ nome: 'Projeto Saúde' })).toBeNull()
+    expect(getAuditValor({ valor: 'não é número' })).toBeNull()
+    expect(getAuditValor(null)).toBeNull()
+    expect(getAuditValor('string qualquer')).toBeNull()
   })
 })
 

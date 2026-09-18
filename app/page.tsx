@@ -19,6 +19,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { EsqueciSenhaDialog } from './esqueci-senha-dialog'
 
 export default function Page() {
   const router = useRouter()
@@ -26,6 +27,7 @@ export default function Page() {
   const [credential, setCredential] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [esqueciSenhaOpen, setEsqueciSenhaOpen] = useState(false)
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -44,7 +46,8 @@ export default function Page() {
         return
       }
 
-      router.push('/admin')
+      const data = await res.json().catch(() => null)
+      router.push(data?.mustChangePassword ? '/trocar-senha' : '/admin')
       router.refresh()
     } finally {
       setLoading(false)
@@ -99,7 +102,7 @@ export default function Page() {
                   id="credential"
                   name="credential"
                   autoComplete="username"
-                  placeholder="Digite sua matrícula ou CPF"
+                  placeholder="Digite seu nome de usuário ou e-mail"
                   className="h-11 pl-10"
                   value={credential}
                   onChange={(e) => setCredential(e.target.value)}
@@ -109,7 +112,16 @@ export default function Page() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="password">Senha de Acesso</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Senha de Acesso</Label>
+                <button
+                  type="button"
+                  onClick={() => setEsqueciSenhaOpen(true)}
+                  className="text-xs font-medium text-primary transition-colors hover:underline"
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
               <div className="relative">
                 <LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -150,6 +162,8 @@ export default function Page() {
           </a>
         </CardFooter>
       </Card>
+
+      <EsqueciSenhaDialog open={esqueciSenhaOpen} onOpenChange={setEsqueciSenhaOpen} />
     </main>
   )
 }

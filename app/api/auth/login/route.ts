@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import { createSessionToken, setSessionCookie } from '@/lib/auth'
 import { isBootstrapAdminUsername, verifyBootstrapAdminPassword } from '@/lib/bootstrap-admin'
 import { clearLoginFailures, getLoginClientIdentifier, getLoginThrottleStatus, registerFailedLogin } from '@/lib/login-throttle'
+import { sendVerificationCodeEmail } from '@/lib/mail'
+import { generateVerificationCode, VERIFICATION_CODE_DURATION_MS } from '@/lib/password'
 import { prisma } from '@/lib/prisma'
 
 // Hash fixo usado quando o usuário não existe, para que o tempo de resposta
@@ -30,9 +32,11 @@ export async function POST(request: Request) {
     select: {
       id: true,
       username: true,
+      email: true,
       passwordHash: true,
       role: true,
       secretariaId: true,
+      mustChangePassword: true,
     },
   })
 
@@ -56,14 +60,34 @@ export async function POST(request: Request) {
     projetoIds = links.map((link) => link.projetoId)
   }
 
+  const mustChangePassword = user.mustChangePassword ?? false
+
+  if (mustChangePassword && user.email) {
+    const { code, codeHash } = generateVerificationCode()
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: codeHash,
+        passwordResetExpires: new Date(Date.now() + VERIFICATION_CODE_DURATION_MS),
+      },
+    })
+
+    try {
+      await sendVerificationCodeEmail(user.email, code)
+    } catch (err) {
+      console.error('Falha ao enviar e-mail de confirmação de senha:', err)
+    }
+  }
+
   const token = await createSessionToken({
     userId: user.id,
     username: user.username,
     role: user.role,
     secretariaId: user.secretariaId,
     projetoIds,
+    mustChangePassword,
   })
   await setSessionCookie(token)
 
-  return NextResponse.json({ ok: true, role: user.role })
+  return NextResponse.json({ ok: true, role: user.role, mustChangePassword })
 }

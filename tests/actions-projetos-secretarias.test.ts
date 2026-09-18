@@ -18,6 +18,7 @@ const {
       },
       indicador: {
         create: vi.fn(),
+        findFirst: vi.fn(),
         findUnique: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
@@ -43,7 +44,7 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }))
 
 import { createIndicador } from '@/lib/actions/indicadores'
-import { createProjeto, deleteProjeto, updateProjeto } from '@/lib/actions/projetos'
+import { createProjeto, deleteProjeto, setPrazoAtualizacao, updateProjeto } from '@/lib/actions/projetos'
 import { createSecretaria } from '@/lib/actions/secretarias'
 
 describe('ações de projetos', () => {
@@ -106,11 +107,16 @@ describe('ações de projetos', () => {
   it('atualiza somente projeto pertencente à secretaria da sessão', async () => {
     prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, secretariaId: 10 })
 
-    await updateProjeto(12, '  Nome atualizado ', ' descrição ')
+    await updateProjeto(12, '  Nome atualizado ', ' descrição ', ' Fulana de Tal ', ' (22) 90000-0000 ')
 
     expect(prismaMock.projeto.update).toHaveBeenCalledWith({
       where: { id: 12 },
-      data: { nome: 'Nome atualizado', descricao: 'descrição' },
+      data: {
+        nome: 'Nome atualizado',
+        descricao: 'descrição',
+        responsavelNome: 'Fulana de Tal',
+        responsavelTelefone: '(22) 90000-0000',
+      },
     })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin')
   })
@@ -118,10 +124,22 @@ describe('ações de projetos', () => {
   it('bloqueia atualização e exclusão de projeto de outra secretaria', async () => {
     prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, secretariaId: 99 })
 
-    await expect(updateProjeto(12, 'Nome', '')).rejects.toBeInstanceOf(UnauthorizedErrorMock)
+    await expect(updateProjeto(12, 'Nome', '', 'Fulana', '(22) 90000-0000')).rejects.toBeInstanceOf(UnauthorizedErrorMock)
     await expect(deleteProjeto(12)).rejects.toThrow('Este projeto não pertence à sua secretaria.')
     expect(prismaMock.projeto.update).not.toHaveBeenCalled()
     expect(prismaMock.projeto.delete).not.toHaveBeenCalled()
+  })
+
+  it('rejeita atualização sem responsável ou telefone', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, secretariaId: 10 })
+
+    await expect(updateProjeto(12, 'Nome', '', '', '(22) 90000-0000')).rejects.toThrow(
+      'Informe o nome completo e o telefone de contato do responsável.',
+    )
+    await expect(updateProjeto(12, 'Nome', '', 'Fulana', '   ')).rejects.toThrow(
+      'Informe o nome completo e o telefone de contato do responsável.',
+    )
+    expect(prismaMock.projeto.update).not.toHaveBeenCalled()
   })
 
   it('exclui projeto após validar a posse', async () => {
@@ -131,6 +149,70 @@ describe('ações de projetos', () => {
 
     expect(prismaMock.projeto.delete).toHaveBeenCalledWith({ where: { id: 12 } })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin')
+  })
+
+  it('permite configurar o prazo de atualização de projeto da própria secretaria', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, nome: 'Projeto', secretariaId: 10 })
+
+    await setPrazoAtualizacao(12, 7)
+
+    expect(prismaMock.projeto.update).toHaveBeenCalledWith({ where: { id: 12 }, data: { prazoAtualizacaoDias: 7 } })
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/projetos/12')
+  })
+
+  it('bloqueia configurar prazo de projeto de outra secretaria e rejeita valor inválido', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, nome: 'Projeto', secretariaId: 99 })
+    await expect(setPrazoAtualizacao(12, 7)).rejects.toBeInstanceOf(UnauthorizedErrorMock)
+
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, nome: 'Projeto', secretariaId: 10 })
+    await expect(setPrazoAtualizacao(12, 0)).rejects.toThrow('Informe um número de dias válido.')
+
+    expect(prismaMock.projeto.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('responsável de projeto (projeto_admin) editando o próprio projeto', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('permite ao responsável do projeto atualizar nome, briefing e contato', async () => {
+    requireSessionMock.mockResolvedValue({
+      userId: 40,
+      username: 'joao.responsavel',
+      role: 'projeto_admin',
+      secretariaId: null,
+      projetoIds: [12],
+    })
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, secretariaId: 10 })
+
+    await updateProjeto(12, 'Nome atualizado', 'Novo briefing', 'Fulana de Tal', '(22) 90000-0000')
+
+    expect(prismaMock.projeto.update).toHaveBeenCalledWith({
+      where: { id: 12 },
+      data: {
+        nome: 'Nome atualizado',
+        descricao: 'Novo briefing',
+        responsavelNome: 'Fulana de Tal',
+        responsavelTelefone: '(22) 90000-0000',
+      },
+    })
+  })
+
+  it('bloqueia o responsável de editar um projeto que não é dele', async () => {
+    requireSessionMock.mockResolvedValue({
+      userId: 40,
+      username: 'joao.responsavel',
+      role: 'projeto_admin',
+      secretariaId: null,
+      projetoIds: [20],
+    })
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, secretariaId: 10 })
+
+    await expect(updateProjeto(12, 'Nome', '', 'Fulana', '(22) 90000-0000')).rejects.toThrow(
+      'Você não é responsável por este projeto.',
+    )
+    expect(prismaMock.projeto.update).not.toHaveBeenCalled()
   })
 })
 

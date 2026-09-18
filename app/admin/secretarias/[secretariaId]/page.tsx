@@ -2,12 +2,11 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { AdminHeader } from '@/app/admin/admin-header'
-import { SecretariaUserPanel } from '@/app/admin/credential-components'
 import { NovoProjetoForm } from '@/app/admin/secretaria-admin-dashboard'
 import { ProjetoCardGrid } from '@/app/admin/projeto-card-grid'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSession } from '@/lib/auth'
-import { getProjetosComIndicadores, getSecretariaAdminBySecretariaId, getSecretariaById } from '@/lib/data'
+import { getProjetosComIndicadores, getSecretariaById } from '@/lib/data'
 import { getSecretariaIcon } from '@/lib/secretaria-icon'
 
 export default async function SecretariaDetailPage({ params }: { params: Promise<{ secretariaId: string }> }) {
@@ -22,7 +21,7 @@ export default async function SecretariaDetailPage({ params }: { params: Promise
   const secretaria = await getSecretariaById(id)
   if (!secretaria) notFound()
 
-  const [admin, projetos] = await Promise.all([getSecretariaAdminBySecretariaId(id), getProjetosComIndicadores(id)])
+  const projetos = await getProjetosComIndicadores(id)
 
   const Icon = getSecretariaIcon(secretaria.nome)
 
@@ -49,8 +48,6 @@ export default async function SecretariaDetailPage({ params }: { params: Promise
             </p>
           </div>
         </div>
-
-        <SecretariaUserPanel secretariaId={secretaria.id} admin={admin} />
 
         <Card>
           <CardHeader>

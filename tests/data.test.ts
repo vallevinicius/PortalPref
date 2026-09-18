@@ -23,13 +23,13 @@ const { prismaMock } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
 import {
+  getAllUsers,
   getAssignableProjetoUsers,
   getProjetoAdminByProjetoId,
   getProjetoComIndicadores,
   getProjetosComIndicadores,
   getProjetosPorIds,
   getProjetosResumo,
-  getSecretariaAdminBySecretariaId,
   getSecretariaAdmins,
   getSecretariaById,
   getSecretarias,
@@ -85,25 +85,6 @@ describe('lib/data', () => {
     expect(prismaMock.secretaria.findMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: { nome: 'asc' } }))
   })
 
-  it('mapeia o administrador de uma secretaria e trata relação ausente', async () => {
-    prismaMock.user.findFirst.mockResolvedValue({
-      id: 7,
-      username: 'saude-admin',
-      secretariaId: 2,
-      secretaria: { nome: 'Saúde' },
-    })
-
-    await expect(getSecretariaAdminBySecretariaId(2)).resolves.toEqual({
-      id: 7,
-      username: 'saude-admin',
-      secretaria_id: 2,
-      secretaria_nome: 'Saúde',
-    })
-
-    prismaMock.user.findFirst.mockResolvedValue(null)
-    await expect(getSecretariaAdminBySecretariaId(99)).resolves.toBeNull()
-  })
-
   it('lista admins de secretaria e ignora registros sem relação válida', async () => {
     prismaMock.user.findMany.mockResolvedValue([
       { id: 1, username: 'admin-a', secretariaId: 3, secretaria: { nome: 'A' } },
@@ -113,6 +94,95 @@ describe('lib/data', () => {
     await expect(getSecretariaAdmins()).resolves.toEqual([
       { id: 1, username: 'admin-a', secretaria_id: 3, secretaria_nome: 'A' },
     ])
+  })
+
+  it('lista secretários e responsáveis de projeto com e-mail e vínculos, sem incluir super admins', async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: 1,
+        username: 'saude-admin',
+        email: 'saude@x.com',
+        role: 'secretaria_admin',
+        secretariaId: 7,
+        secretaria: { nome: 'Saúde' },
+        projetosResponsavel: [],
+      },
+      {
+        id: 2,
+        username: 'joao.responsavel',
+        email: null,
+        role: 'projeto_admin',
+        secretariaId: null,
+        secretaria: null,
+        projetosResponsavel: [
+          { projeto: { id: 10, nome: 'Projeto A', secretariaId: 7, secretaria: { nome: 'Saúde' } } },
+          { projeto: { id: 11, nome: 'Projeto B', secretariaId: 7, secretaria: { nome: 'Saúde' } } },
+        ],
+      },
+    ])
+
+    await expect(getAllUsers()).resolves.toEqual([
+      { id: 1, username: 'saude-admin', email: 'saude@x.com', role: 'secretaria_admin', secretaria_id: 7, secretaria_nome: 'Saúde', projetos: [] },
+      {
+        id: 2,
+        username: 'joao.responsavel',
+        email: null,
+        role: 'projeto_admin',
+        secretaria_id: 7,
+        secretaria_nome: 'Saúde',
+        projetos: [{ id: 10, nome: 'Projeto A' }, { id: 11, nome: 'Projeto B' }],
+      },
+    ])
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith({
+      where: { role: { in: ['secretaria_admin', 'projeto_admin'] } },
+      orderBy: [{ username: 'asc' }],
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        secretariaId: true,
+        secretaria: { select: { nome: true } },
+        projetosResponsavel: {
+          orderBy: { createdAt: 'asc' },
+          select: { projeto: { select: { id: true, nome: true, secretariaId: true, secretaria: { select: { nome: true } } } } },
+        },
+      },
+    })
+  })
+
+  it('filtra por secretaria e retorna só responsáveis de projeto daquela secretaria', async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: 2,
+        username: 'joao.responsavel',
+        email: 'joao@x.com',
+        role: 'projeto_admin',
+        secretariaId: null,
+        secretaria: null,
+        projetosResponsavel: [{ projeto: { id: 10, nome: 'Projeto A', secretariaId: 7, secretaria: { nome: 'Saúde' } } }],
+      },
+    ])
+
+    await expect(getAllUsers(7)).resolves.toEqual([
+      {
+        id: 2,
+        username: 'joao.responsavel',
+        email: 'joao@x.com',
+        role: 'projeto_admin',
+        secretaria_id: 7,
+        secretaria_nome: 'Saúde',
+        projetos: [{ id: 10, nome: 'Projeto A' }],
+      },
+    ])
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          role: 'projeto_admin',
+          projetosResponsavel: { some: {}, every: { projeto: { secretariaId: 7 } } },
+        },
+      }),
+    )
   })
 
   it('lista super admins pelo nome', async () => {

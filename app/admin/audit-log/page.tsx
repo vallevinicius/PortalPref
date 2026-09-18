@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { AUDIT_ACTION_DESCRIPTIONS, AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, AUDIT_ENTITY_TYPES, AUDIT_IGNORED_ACTIONS, getAuditDetailEntries, type AuditEntityType } from '@/lib/audit-log'
+import { AUDIT_ACTION_DESCRIPTIONS, AUDIT_ACTION_LABELS, AUDIT_ENTITY_LABELS, AUDIT_ENTITY_TYPES, AUDIT_IGNORED_ACTIONS, getAuditDetailEntries, getAuditValor, type AuditEntityType } from '@/lib/audit-log'
 import { getSession } from '@/lib/auth'
 import { getAuditLogs, type AuditLogEntry } from '@/lib/actions/audit-log'
 import { getSecretariaAdmins, getSuperAdmins } from '@/lib/data'
@@ -58,6 +58,8 @@ function DetailsCell({ entry }: { entry: AuditLogEntry }) {
 }
 
 function AuditRow({ entry }: { entry: AuditLogEntry }) {
+  const valor = getAuditValor(entry.details)
+
   return (
     <tr className="border-b border-border/70 align-top last:border-0">
       <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</td>
@@ -83,6 +85,9 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
         ) : (
           <span className="text-muted-foreground">Não se aplica</span>
         )}
+      </td>
+      <td className="whitespace-nowrap px-4 py-3 font-medium text-foreground">
+        {valor ?? <span className="font-normal text-muted-foreground">—</span>}
       </td>
       <td className="max-w-sm px-4 py-3">
         <DetailsCell entry={entry} />
@@ -182,7 +187,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
             <p className="p-6 text-sm text-muted-foreground">Nenhum evento encontrado para os filtros selecionados.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1050px] text-left text-sm">
+              <table className="w-full min-w-300 text-left text-sm">
                 <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium">Data</th>
@@ -190,6 +195,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
                     <th className="px-4 py-3 font-medium">Tipo de registro</th>
                     <th className="px-4 py-3 font-medium">Responsável</th>
                     <th className="px-4 py-3 font-medium">Usuário afetado</th>
+                    <th className="px-4 py-3 font-medium">Valor lançado</th>
                     <th className="px-4 py-3 font-medium">Resumo e informações</th>
                   </tr>
                 </thead>

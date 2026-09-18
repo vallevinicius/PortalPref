@@ -39,21 +39,26 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'auth.login': 'Login realizado',
   'auth.logout': 'Logout realizado',
   'user.create': 'Usuário criado',
+  'user.update': 'Usuário atualizado',
+  'user.delete': 'Usuário excluído',
   'user.assign': 'Usuário designado para o projeto',
   'user.unassign': 'Usuário removido do projeto',
   'user.password_reset': 'Senha redefinida',
+  'user.password_reset_email': 'E-mail de redefinição de senha enviado',
+  'user.password_self_change': 'Senha definida pelo usuário',
   view_password: 'Senha visualizada',
   'secretaria.create': 'Secretaria criada',
   'project.create': 'Projeto criado',
   'project.update': 'Projeto atualizado',
   'project.set_prazo': 'Prazo de atualização configurado',
   'project.delete': 'Projeto excluído',
-  'indicator.create': 'Indicador criado',
-  'indicator.update': 'Indicador atualizado',
+  'indicator.create': 'Gráfico criado',
+  'indicator.add_value': 'Número lançado',
+  'indicator.update': 'Número atualizado',
   'indicator.rename_group': 'Gráfico renomeado',
   'indicator.set_scale': 'Escala do gráfico configurada',
   'indicator.remove_scale': 'Escala do gráfico removida',
-  'indicator.delete': 'Indicador excluído',
+  'indicator.delete': 'Número excluído',
   'indicator.delete_group': 'Gráfico excluído',
   'audit_log.view': 'Registro de auditoria consultado',
 }
@@ -74,21 +79,26 @@ export const AUDIT_ACTION_DESCRIPTIONS: Record<string, string> = {
   'auth.login': 'A pessoa entrou no sistema.',
   'auth.logout': 'A pessoa encerrou a sessão.',
   'user.create': 'Um novo usuário foi cadastrado.',
+  'user.update': 'O nome de usuário ou e-mail de um usuário foi atualizado.',
+  'user.delete': 'Um usuário foi excluído.',
   'user.assign': 'Um usuário já existente foi designado como responsável de um projeto.',
   'user.unassign': 'Um usuário deixou de ser responsável por um projeto.',
   'user.password_reset': 'A senha de um usuário foi redefinida.',
+  'user.password_reset_email': 'Um administrador enviou um e-mail de redefinição de senha para o usuário.',
+  'user.password_self_change': 'O próprio usuário definiu uma nova senha, substituindo a senha padrão.',
   view_password: 'Uma senha foi visualizada por um administrador autorizado.',
   'secretaria.create': 'Uma nova secretaria foi cadastrada.',
   'project.create': 'Um novo projeto foi criado.',
   'project.update': 'As informações de um projeto foram alteradas.',
   'project.set_prazo': 'O prazo de atualização de um projeto foi configurado.',
   'project.delete': 'Um projeto foi excluído.',
-  'indicator.create': 'Um novo indicador foi criado.',
-  'indicator.update': 'As informações de um indicador foram alteradas.',
+  'indicator.create': 'Um novo gráfico foi criado.',
+  'indicator.add_value': 'Um novo número foi lançado em um gráfico já existente.',
+  'indicator.update': 'As informações de um número foram alteradas.',
   'indicator.rename_group': 'Um gráfico foi renomeado.',
   'indicator.set_scale': 'A escala de classificação de um gráfico foi configurada.',
   'indicator.remove_scale': 'A escala de classificação de um gráfico foi removida.',
-  'indicator.delete': 'Um indicador foi excluído.',
+  'indicator.delete': 'Um número foi excluído de um gráfico.',
   'indicator.delete_group': 'Um gráfico e todos os seus números foram excluídos.',
   'audit_log.view': 'O histórico de atividades foi consultado.',
 }
@@ -117,7 +127,9 @@ const AUDIT_DETAIL_LABELS: Record<string, string> = {
   indicadores: 'Indicadores inseridos',
 }
 
-const INTERNAL_DETAIL_KEYS = new Set(['seedKey'])
+// "valor"/"unidade" ganham sua própria coluna na tela de auditoria (getAuditValor),
+// então saem da lista genérica de detalhes para não aparecer duas vezes.
+const INTERNAL_DETAIL_KEYS = new Set(['seedKey', 'valor', 'unidade'])
 
 function humanizeDetailKey(key: string) {
   return key
@@ -164,4 +176,17 @@ export function getAuditDetailEntries(details: unknown): AuditDetailEntry[] {
       label: AUDIT_DETAIL_LABELS[key] ?? humanizeDetailKey(key),
       value: formatDetailValue(key, value),
     }))
+}
+
+// Extrai e formata o valor/número lançado num indicador, para a coluna dedicada
+// da tela de auditoria (ex.: "1.000" ou "1.000 pessoas"). Retorna null quando a
+// atividade não tem um valor associado (a maioria dos tipos de ação).
+export function getAuditValor(details: unknown): string | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null
+
+  const { valor, unidade } = details as Record<string, unknown>
+  if (typeof valor !== 'number' || !Number.isFinite(valor)) return null
+
+  const valorFormatado = new Intl.NumberFormat('pt-BR').format(valor)
+  return typeof unidade === 'string' && unidade ? `${valorFormatado} ${unidade}` : valorFormatado
 }

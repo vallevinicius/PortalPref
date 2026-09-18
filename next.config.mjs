@@ -13,7 +13,7 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  allowedDevOrigins: ["172.17.56.58"],
+  allowedDevOrigins: ["172.17.46.50"],
   typescript: {
     ignoreBuildErrors: true,
   },

@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import {
   createIndicador,
   deleteIndicador,
@@ -42,8 +43,9 @@ import {
   renameIndicadorGrupo,
   setIndicadorEscala,
 } from '@/lib/actions/indicadores'
-import { deleteProjeto, setPrazoAtualizacao } from '@/lib/actions/projetos'
+import { deleteProjeto, setPrazoAtualizacao, updateProjeto } from '@/lib/actions/projetos'
 import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
+import { formatTelefone } from '@/lib/format-telefone'
 import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
 
 const LINE_COLOR = '#006e6d'
@@ -172,9 +174,26 @@ function formatDiaMes(data: Date) {
   return `${String(data.getDate()).padStart(2, '0')}/${String(data.getMonth() + 1).padStart(2, '0')}`
 }
 
-function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: number): Bucket[] {
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
+function formatMesAno(ano: number, mes: number) {
+  return `${MESES[mes]}/${String(ano).slice(2)}`
+}
+
+// Desloca a data de referência ("hoje") para trás em janelas inteiras do período,
+// permitindo navegar para períodos mais antigos (offset > 0).
+function shiftReferenceDate(hoje: Date, range: RangeKey, offset: number): Date {
+  const data = new Date(hoje)
+  if (offset === 0) return data
+  if (range === 'dias') data.setDate(data.getDate() - offset * 7)
+  else if (range === 'mes') data.setDate(data.getDate() - offset * 30)
+  else if (range === 'semanas') data.setDate(data.getDate() - offset * 56)
+  else if (range === '6meses') data.setMonth(data.getMonth() - offset * 6)
+  return data
+}
+
+function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: number, offset: number): Bucket[] {
+  const hojeBase = new Date()
+  hojeBase.setHours(0, 0, 0, 0)
+  const hoje = shiftReferenceDate(hojeBase, range, offset)
 
   if (range === 'dias' || range === 'mes') {
     const numDias = range === 'dias' ? 7 : 30
@@ -316,6 +335,48 @@ function YearSwitcher({ ano, onChange }: { ano: number; onChange: (proximoAno: n
   )
 }
 
+function formatPeriodoLabel(range: RangeKey, offset: number): string {
+  const hojeBase = new Date()
+  hojeBase.setHours(0, 0, 0, 0)
+  const fim = shiftReferenceDate(hojeBase, range, offset)
+
+  if (range === '6meses') {
+    const absFim = fim.getFullYear() * 12 + fim.getMonth()
+    const absInicio = absFim - 5
+    const anoInicio = Math.floor(absInicio / 12)
+    const mesInicio = ((absInicio % 12) + 12) % 12
+    return `${formatMesAno(anoInicio, mesInicio)} – ${formatMesAno(fim.getFullYear(), fim.getMonth())}`
+  }
+
+  const inicio = new Date(fim)
+  if (range === 'dias') inicio.setDate(inicio.getDate() - 6)
+  else if (range === 'mes') inicio.setDate(inicio.getDate() - 29)
+  else if (range === 'semanas') inicio.setDate(inicio.getDate() - 55)
+
+  return `${formatDiaMes(inicio)} – ${formatDiaMes(fim)}`
+}
+
+function PeriodSwitcher({ range, offset, onChange }: { range: RangeKey; offset: number; onChange: (proximoOffset: number) => void }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(offset + 1)} aria-label="Período anterior">
+        <ChevronLeft className="size-4" />
+      </Button>
+      <span className="min-w-26 text-center text-xs font-medium text-foreground">{formatPeriodoLabel(range, offset)}</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => onChange(Math.max(0, offset - 1))}
+        disabled={offset === 0}
+        aria-label="Próximo período"
+      >
+        <ChevronRight className="size-4" />
+      </Button>
+    </div>
+  )
+}
+
 function IndicadorChart({
   titulo,
   pontos,
@@ -336,7 +397,8 @@ function IndicadorChart({
   const deltaPct = primeiro !== 0 ? (delta / Math.abs(primeiro)) * 100 : null
   const [range, setRange] = useState<RangeKey>('1ano')
   const [ano, setAno] = useState(() => new Date().getFullYear())
-  const dadosBucket = useMemo(() => buildBucketedData(pontos, range, ano), [pontos, range, ano])
+  const [offset, setOffset] = useState(0)
+  const dadosBucket = useMemo(() => buildBucketedData(pontos, range, ano, offset), [pontos, range, ano, offset])
   const totalPeriodo = useMemo(
     () => dadosBucket.reduce((soma, bucket) => soma + (bucket.valor ?? 0), 0),
     [dadosBucket],
@@ -359,8 +421,15 @@ function IndicadorChart({
         {escala && <EscalaBadge valor={totalPeriodo} escala={escala} />}
       </div>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <RangeSwitcher range={range} onChange={setRange} />
+        <RangeSwitcher
+          range={range}
+          onChange={(proximoRange) => {
+            setRange(proximoRange)
+            setOffset(0)
+          }}
+        />
         {range === '1ano' && <YearSwitcher ano={ano} onChange={setAno} />}
+        {range !== '1ano' && range !== 'total' && <PeriodSwitcher range={range} offset={offset} onChange={setOffset} />}
       </div>
       <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
@@ -889,6 +958,98 @@ function DeleteProjetoButton({ projeto }: { projeto: Projeto }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  )
+}
+
+export function EditarProjetoButton({ projeto }: { projeto: Projeto }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [nome, setNome] = useState(projeto.nome)
+  const [descricao, setDescricao] = useState(projeto.descricao ?? '')
+  const [responsavelNome, setResponsavelNome] = useState(projeto.responsavel_nome ?? '')
+  const [responsavelTelefone, setResponsavelTelefone] = useState(projeto.responsavel_telefone ?? '')
+  const [isPending, startTransition] = useTransition()
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen) {
+      setNome(projeto.nome)
+      setDescricao(projeto.descricao ?? '')
+      setResponsavelNome(projeto.responsavel_nome ?? '')
+      setResponsavelTelefone(projeto.responsavel_telefone ?? '')
+    }
+    setOpen(nextOpen)
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    startTransition(async () => {
+      try {
+        await updateProjeto(projeto.id, nome, descricao, responsavelNome, responsavelTelefone)
+        setOpen(false)
+        toast.success('Projeto atualizado.')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível atualizar o projeto.')
+      }
+    })
+  }
+
+  return (
+    <>
+      <Button type="button" variant="ghost" size="icon-sm" onClick={() => handleOpenChange(true)} aria-label="Editar projeto">
+        <Pencil className="size-3.5" />
+      </Button>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar projeto</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="editar-projeto-nome">Nome do projeto</Label>
+              <Input id="editar-projeto-nome" value={nome} onChange={(e) => setNome(e.target.value)} required autoFocus />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="editar-projeto-descricao">Briefing do projeto</Label>
+              <Textarea
+                id="editar-projeto-descricao"
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                placeholder="Breve descrição do que é o projeto (opcional)"
+                rows={3}
+              />
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="editar-projeto-responsavel-nome">Nome completo do responsável</Label>
+                <Input
+                  id="editar-projeto-responsavel-nome"
+                  value={responsavelNome}
+                  onChange={(e) => setResponsavelNome(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="editar-projeto-responsavel-telefone">Telefone de contato</Label>
+                <Input
+                  id="editar-projeto-responsavel-telefone"
+                  type="tel"
+                  inputMode="numeric"
+                  value={responsavelTelefone}
+                  onChange={(e) => setResponsavelTelefone(formatTelefone(e.target.value))}
+                  placeholder="(22) 90000-0000"
+                  maxLength={15}
+                  required
+                />
+              </div>
+            </div>
+            <Button type="submit" disabled={isPending} className="mt-1">
+              {isPending ? 'Salvando...' : 'Salvar alterações'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

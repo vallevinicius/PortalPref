@@ -12,6 +12,7 @@ export type SessionPayload = {
   role: Role
   secretariaId: number | null
   projetoIds: number[]
+  mustChangePassword: boolean
 }
 
 function getSecretKey() {

@@ -2,11 +2,10 @@ import { AlertTriangle, ArrowLeft, Clock, Phone, User } from 'lucide-react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { AdminHeader } from '@/app/admin/admin-header'
-import { ProjetoUserPanel } from '@/app/admin/credential-components'
 import { getSession } from '@/lib/auth'
-import { getAssignableProjetoUsers, getProjetoAdminByProjetoId, getProjetoComIndicadores } from '@/lib/data'
+import { getProjetoComIndicadores } from '@/lib/data'
 import { calcularStatusAtualizacao } from '@/lib/prazo-atualizacao'
-import { PrazoAtualizacaoButton, ProjetoDashboard } from './projeto-dashboard'
+import { EditarProjetoButton, PrazoAtualizacaoButton, ProjetoDashboard } from './projeto-dashboard'
 
 export default async function ProjetoDetailPage({ params }: { params: Promise<{ projetoId: string }> }) {
   const session = await getSession()
@@ -27,11 +26,6 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
 
   const canManageUsers = isSuperAdmin || isOwner
   const editable = canManageUsers || isProjectResponsible
-
-  const admin = canManageUsers ? await getProjetoAdminByProjetoId(id) : null
-  const assignableUsers = canManageUsers && !admin
-    ? await getAssignableProjetoUsers(projeto.secretaria_id)
-    : []
 
   const backHref = isSuperAdmin ? `/admin/secretarias/${projeto.secretaria_id}` : '/admin'
   const subtitle = isSuperAdmin ? 'Painel da Prefeita' : isOwner ? 'Painel da Secretaria' : 'Painel do Projeto'
@@ -55,6 +49,7 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{projeto.secretaria_nome}</p>
           <div className="flex items-center gap-1">
             <h2 className="text-xl font-semibold text-foreground">{projeto.nome}</h2>
+            {editable && <EditarProjetoButton projeto={projeto} />}
             {canManageUsers && <PrazoAtualizacaoButton projetoId={projeto.id} prazoAtual={projeto.prazo_atualizacao_dias} />}
           </div>
           {projeto.descricao && <p className="mt-1 text-sm text-muted-foreground">{projeto.descricao}</p>}
@@ -95,8 +90,6 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
         )}
-
-        {canManageUsers && <ProjetoUserPanel projetoId={projeto.id} admin={admin} assignableUsers={assignableUsers} />}
 
         <ProjetoDashboard projeto={projeto} editable={editable} canDeleteProject={canManageUsers} />
       </div>

@@ -13,6 +13,7 @@ const { prismaMock, requireSessionMock, revalidatePathMock, UnauthorizedErrorMoc
       },
       indicador: {
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }))
 
 import { createIndicador, deleteIndicador } from '@/lib/actions/indicadores'
-import { createProjeto, deleteProjeto, updateProjeto } from '@/lib/actions/projetos'
+import { createProjeto, deleteProjeto, setPrazoAtualizacao, updateProjeto } from '@/lib/actions/projetos'
 
 describe('acesso global do super administrador a projetos', () => {
   beforeEach(() => {
@@ -70,11 +71,16 @@ describe('acesso global do super administrador a projetos', () => {
   it('permite ao super administrador atualizar projeto de outra secretaria', async () => {
     prismaMock.projeto.findUnique.mockResolvedValueOnce({ id: 12, secretariaId: 99 })
 
-    await updateProjeto(12, '  Projeto atualizado ', ' descrição ')
+    await updateProjeto(12, '  Projeto atualizado ', ' descrição ', ' Fulana de Tal ', ' (22) 90000-0000 ')
 
     expect(prismaMock.projeto.update).toHaveBeenCalledWith({
       where: { id: 12 },
-      data: { nome: 'Projeto atualizado', descricao: 'descrição' },
+      data: {
+        nome: 'Projeto atualizado',
+        descricao: 'descrição',
+        responsavelNome: 'Fulana de Tal',
+        responsavelTelefone: '(22) 90000-0000',
+      },
     })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/secretarias/99')
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/projetos/12')
@@ -87,6 +93,16 @@ describe('acesso global do super administrador a projetos', () => {
 
     expect(prismaMock.projeto.delete).toHaveBeenCalledWith({ where: { id: 12 } })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/secretarias/99')
+  })
+
+  it('permite ao super administrador configurar o prazo de projeto de qualquer secretaria', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValueOnce({ id: 12, nome: 'Projeto', secretariaId: 99 })
+
+    await setPrazoAtualizacao(12, 15)
+
+    expect(prismaMock.projeto.update).toHaveBeenCalledWith({ where: { id: 12 }, data: { prazoAtualizacaoDias: 15 } })
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/secretarias/99')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/projetos/12')
   })
 })
 
@@ -121,7 +137,7 @@ describe('restrições do administrador de secretaria', () => {
   it('bloqueia atualização de projeto de outra secretaria', async () => {
     prismaMock.projeto.findUnique.mockResolvedValueOnce({ id: 12, secretariaId: 99 })
 
-    await expect(updateProjeto(12, 'Nome', '')).rejects.toThrow('Este projeto não pertence à sua secretaria.')
+    await expect(updateProjeto(12, 'Nome', '', 'Fulana', '(22) 90000-0000')).rejects.toThrow('Este projeto não pertence à sua secretaria.')
     expect(prismaMock.projeto.update).not.toHaveBeenCalled()
   })
 })

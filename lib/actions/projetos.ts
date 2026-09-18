@@ -19,6 +19,13 @@ async function getAuthorizedProjeto(projetoId: number, session: SessionPayload) 
     return projeto
   }
 
+  if (session.role === 'projeto_admin') {
+    if (!session.projetoIds.includes(projetoId)) {
+      throw new UnauthorizedError('Você não é responsável por este projeto.')
+    }
+    return projeto
+  }
+
   if (!session.secretariaId) {
     throw new UnauthorizedError('Sua conta não está vinculada a uma secretaria.')
   }
@@ -118,8 +125,14 @@ export async function setPrazoAtualizacao(projetoId: number, prazoAtualizacaoDia
   revalidatePath(`/admin/projetos/${projetoId}`)
 }
 
-export async function updateProjeto(projetoId: number, nome: string, descricao: string) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+export async function updateProjeto(
+  projetoId: number,
+  nome: string,
+  descricao: string,
+  responsavelNome: string,
+  responsavelTelefone: string,
+) {
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   const projeto = await getAuthorizedProjeto(projetoId, session)
 
   const trimmed = nome.trim()
@@ -127,11 +140,19 @@ export async function updateProjeto(projetoId: number, nome: string, descricao: 
     throw new Error('Informe o nome do projeto.')
   }
 
+  const trimmedResponsavelNome = responsavelNome.trim()
+  const trimmedResponsavelTelefone = responsavelTelefone.trim()
+  if (!trimmedResponsavelNome || !trimmedResponsavelTelefone) {
+    throw new Error('Informe o nome completo e o telefone de contato do responsável.')
+  }
+
   await prisma.projeto.update({
     where: { id: projetoId },
     data: {
       nome: trimmed,
       descricao: descricao.trim() || null,
+      responsavelNome: trimmedResponsavelNome,
+      responsavelTelefone: trimmedResponsavelTelefone,
     },
   })
 

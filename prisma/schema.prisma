@@ -27,8 +27,11 @@ model Secretaria {
 model User {
   id               Int        @id @default(autoincrement())
   username         String     @unique @db.VarChar(255)
+  email            String?    @unique @db.VarChar(255)
   passwordHash     String     @map("password_hash") @db.VarChar(255)
-  passwordEncrypted String?   @map("password_encrypted") @db.VarChar(512)
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
+  passwordResetToken String? @unique @map("password_reset_token") @db.VarChar(255)
+  passwordResetExpires DateTime? @map("password_reset_expires")
   role             UserRole
   secretariaId     Int?       @map("secretaria_id")
   createdAt        DateTime   @default(now()) @map("created_at")
