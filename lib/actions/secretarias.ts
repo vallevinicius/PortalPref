@@ -2,13 +2,14 @@
 
 import { revalidatePath } from 'next/cache'
 import { recordAuditLog } from '@/lib/audit-log'
-import { requireSession } from '@/lib/auth'
+import { assertCanEdit, requireSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 import { slugify } from '@/lib/slug'
 
 export async function createSecretaria(nome: string) {
   const session = await requireSession('super_admin')
+  assertCanEdit(session)
 
   const trimmed = nome.trim()
   if (!trimmed) {

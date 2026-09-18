@@ -40,6 +40,9 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/auth', () => ({
   requireSession: requireSessionMock,
   UnauthorizedError: UnauthorizedErrorMock,
+  createSessionToken: vi.fn().mockResolvedValue('novo-token'),
+  setSessionCookie: vi.fn().mockResolvedValue(undefined),
+  assertCanEdit: vi.fn(),
 }))
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }))
 
@@ -213,6 +216,56 @@ describe('responsável de projeto (projeto_admin) editando o próprio projeto', 
       'Você não é responsável por este projeto.',
     )
     expect(prismaMock.projeto.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('responsável de projeto (projeto_admin) criando um projeto novo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    prismaMock.projeto.create.mockResolvedValue({ id: 22, nome: 'Projeto novo', secretariaId: 10 })
+  })
+
+  it('usa a secretaria de um projeto já existente, se torna responsável pelo projeto novo e atualiza a sessão', async () => {
+    requireSessionMock.mockResolvedValue({
+      userId: 40,
+      username: 'joao.responsavel',
+      role: 'projeto_admin',
+      secretariaId: null,
+      projetoIds: [12],
+    })
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 12, secretariaId: 10 })
+
+    const result = await createProjeto('Projeto novo', '', 'Fulana de Tal', '(22) 90000-0000', 30)
+
+    expect(prismaMock.projeto.findUnique).toHaveBeenCalledWith({ where: { id: 12 }, select: { secretariaId: true } })
+    expect(prismaMock.projeto.create).toHaveBeenCalledWith({
+      data: {
+        secretariaId: 10,
+        nome: 'Projeto novo',
+        descricao: null,
+        responsavelNome: 'Fulana de Tal',
+        responsavelTelefone: '(22) 90000-0000',
+        prazoAtualizacaoDias: 30,
+        createdBy: 40,
+        responsaveis: { create: { userId: 40 } },
+      },
+    })
+    expect(result).toEqual({ id: 22 })
+  })
+
+  it('rejeita quando o responsável ainda não tem nenhum projeto vinculado', async () => {
+    requireSessionMock.mockResolvedValue({
+      userId: 40,
+      username: 'joao.responsavel',
+      role: 'projeto_admin',
+      secretariaId: null,
+      projetoIds: [],
+    })
+
+    await expect(createProjeto('Projeto novo', '', 'Fulana de Tal', '(22) 90000-0000', 30)).rejects.toThrow(
+      'Sua conta não está vinculada a uma secretaria.',
+    )
+    expect(prismaMock.projeto.create).not.toHaveBeenCalled()
   })
 })
 

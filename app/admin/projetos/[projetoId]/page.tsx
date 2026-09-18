@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowLeft, Clock, Phone, User } from 'lucide-react'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { AdminHeader } from '@/app/admin/admin-header'
+import { NovoProjetoDialogButton } from '@/app/admin/secretaria-admin-dashboard'
 import { getSession } from '@/lib/auth'
 import { getProjetoComIndicadores } from '@/lib/data'
 import { calcularStatusAtualizacao } from '@/lib/prazo-atualizacao'
@@ -24,7 +25,7 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
   if (session.role === 'secretaria_admin' && !isOwner) redirect('/admin')
   if (session.role === 'projeto_admin' && !isProjectResponsible) redirect('/admin')
 
-  const canManageUsers = isSuperAdmin || isOwner
+  const canManageUsers = (isSuperAdmin && session.canEdit !== false) || isOwner
   const editable = canManageUsers || isProjectResponsible
 
   const backHref = isSuperAdmin ? `/admin/secretarias/${projeto.secretaria_id}` : '/admin'
@@ -36,14 +37,17 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
       <AdminHeader subtitle={`${subtitle} | ${session.username}`} />
 
       <div className="flex flex-col gap-6">
-        {(!isProjectResponsible || session.projetoIds.length > 1) && (
-          <div>
+        <div className="flex items-center justify-between gap-4">
+          {!isProjectResponsible || session.projetoIds.length > 1 ? (
             <Link href={backHref} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary">
               <ArrowLeft className="size-4" />
               Voltar
             </Link>
-          </div>
-        )}
+          ) : (
+            <span />
+          )}
+          {isProjectResponsible && <NovoProjetoDialogButton />}
+        </div>
 
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{projeto.secretaria_nome}</p>

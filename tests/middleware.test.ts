@@ -38,6 +38,7 @@ describe('middleware (sem mock, JWT real)', () => {
       secretariaId: null,
       projetoIds: [],
       mustChangePassword: false,
+      canEdit: true,
     }
     const token = await createSessionToken(payload)
     process.env.SESSION_SECRET = segredoOriginal
@@ -56,6 +57,7 @@ describe('middleware (sem mock, JWT real)', () => {
       secretariaId: null,
       projetoIds: [],
       mustChangePassword: false,
+      canEdit: true,
     }
     const token = await createSessionToken(payload)
 
@@ -72,6 +74,7 @@ describe('middleware (sem mock, JWT real)', () => {
       secretariaId: 10,
       projetoIds: [],
       mustChangePassword: true,
+      canEdit: true,
     }
     const token = await createSessionToken(payload)
 

@@ -18,6 +18,7 @@ export interface SecretariaAdmin {
 export interface SuperAdmin {
   id: number
   username: string
+  canEdit: boolean
 }
 
 export interface ProjetoAdmin {
@@ -285,7 +286,7 @@ export async function getSuperAdmins(): Promise<SuperAdmin[]> {
   const users = await prisma.user.findMany({
     where: { role: UserRole.super_admin },
     orderBy: { username: 'asc' },
-    select: { id: true, username: true },
+    select: { id: true, username: true, canEdit: true },
   })
 
   return users

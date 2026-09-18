@@ -1,6 +1,6 @@
 'use client'
 
-import { UserPlus, Users } from 'lucide-react'
+import { Plus, UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
@@ -25,7 +25,7 @@ import { formatTelefone } from '@/lib/format-telefone'
 import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
 import { ProjetoCardGrid } from './projeto-card-grid'
 
-export function NovoProjetoForm({ secretariaId }: { secretariaId?: number }) {
+export function NovoProjetoForm({ secretariaId, onCreated }: { secretariaId?: number; onCreated?: () => void }) {
   const router = useRouter()
   const [nome, setNome] = useState('')
   const [descricao, setDescricao] = useState('')
@@ -53,6 +53,7 @@ export function NovoProjetoForm({ secretariaId }: { secretariaId?: number }) {
         setPrazoAtualizacaoDias('30')
         toast.success('Projeto criado.')
         router.refresh()
+        onCreated?.()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Não foi possível criar o projeto.')
       }
@@ -128,6 +129,27 @@ export function NovoProjetoForm({ secretariaId }: { secretariaId?: number }) {
         </Button>
       </div>
     </form>
+  )
+}
+
+export function NovoProjetoDialogButton({ label = 'Novo projeto' }: { label?: string }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-1.5">
+        <Plus className="size-3.5" />
+        {label}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Novo projeto</DialogTitle>
+          </DialogHeader>
+          <NovoProjetoForm onCreated={() => setOpen(false)} />
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

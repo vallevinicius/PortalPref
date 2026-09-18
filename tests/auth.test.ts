@@ -20,7 +20,7 @@ vi.mock('next/headers', () => ({ cookies: cookiesMock }))
 
 process.env.SESSION_SECRET = 'test-secret-para-testes-de-auth'
 
-import { createSessionToken, getSession, requireSession, SESSION_COOKIE, UnauthorizedError, verifySessionToken, type SessionPayload } from '@/lib/auth'
+import { assertCanEdit, createSessionToken, getSession, requireSession, SESSION_COOKIE, UnauthorizedError, verifySessionToken, type SessionPayload } from '@/lib/auth'
 
 describe('lib/auth (sem mock, sessão e JWT reais)', () => {
   beforeEach(() => {
@@ -36,6 +36,7 @@ describe('lib/auth (sem mock, sessão e JWT reais)', () => {
         secretariaId: null,
         projetoIds: [],
         mustChangePassword: false,
+        canEdit: true,
       }
       const token = await createSessionToken(payload)
 
@@ -54,6 +55,7 @@ describe('lib/auth (sem mock, sessão e JWT reais)', () => {
         secretariaId: null,
         projetoIds: [],
         mustChangePassword: false,
+        canEdit: true,
       })
       process.env.SESSION_SECRET = segredoOriginal
 
@@ -79,6 +81,7 @@ describe('lib/auth (sem mock, sessão e JWT reais)', () => {
         secretariaId: null,
         projetoIds: [20, 21],
         mustChangePassword: false,
+        canEdit: true,
       }
       const token = await createSessionToken(payload)
       cookieStore.set(SESSION_COOKIE, token)
@@ -100,6 +103,7 @@ describe('lib/auth (sem mock, sessão e JWT reais)', () => {
         secretariaId: null,
         projetoIds: [],
         mustChangePassword: false,
+        canEdit: true,
       })
       cookieStore.set(SESSION_COOKIE, token)
 
@@ -115,6 +119,7 @@ describe('lib/auth (sem mock, sessão e JWT reais)', () => {
         secretariaId: 10,
         projetoIds: [],
         mustChangePassword: false,
+        canEdit: true,
       })
       cookieStore.set(SESSION_COOKIE, token)
 
@@ -130,6 +135,7 @@ describe('lib/auth (sem mock, sessão e JWT reais)', () => {
         secretariaId: null,
         projetoIds: [20],
         mustChangePassword: false,
+        canEdit: true,
       })
       cookieStore.set(SESSION_COOKIE, token)
 
@@ -145,10 +151,44 @@ describe('lib/auth (sem mock, sessão e JWT reais)', () => {
         secretariaId: 5,
         projetoIds: [],
         mustChangePassword: false,
+        canEdit: true,
       })
       cookieStore.set(SESSION_COOKIE, token)
 
       await expect(requireSession()).resolves.toMatchObject({ role: 'secretaria_admin' })
+    })
+  })
+
+  describe('assertCanEdit', () => {
+    function payload(overrides: Partial<SessionPayload>): SessionPayload {
+      return {
+        userId: 1,
+        username: 'root',
+        role: 'super_admin',
+        secretariaId: null,
+        projetoIds: [],
+        mustChangePassword: false,
+        canEdit: true,
+        ...overrides,
+      }
+    }
+
+    it('bloqueia admin supremo com canEdit false', () => {
+      expect(() => assertCanEdit(payload({ canEdit: false }))).toThrow(UnauthorizedError)
+    })
+
+    it('permite admin supremo com canEdit true', () => {
+      expect(() => assertCanEdit(payload({ canEdit: true }))).not.toThrow()
+    })
+
+    it('permite admin supremo com token antigo (sem canEdit no payload)', () => {
+      const semCanEdit = payload({}) as Partial<SessionPayload>
+      delete semCanEdit.canEdit
+      expect(() => assertCanEdit(semCanEdit as SessionPayload)).not.toThrow()
+    })
+
+    it('não restringe outros papéis mesmo com canEdit false', () => {
+      expect(() => assertCanEdit(payload({ role: 'secretaria_admin', secretariaId: 10, canEdit: false }))).not.toThrow()
     })
   })
 })

@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { getProjetosComIndicadores, getProjetosPorIds, getProjetosResumo, getSecretariaAdmins, getSecretarias, getSuperAdmins } from '@/lib/data'
 import { AdminHeader } from './admin-header'
 import { ProjetoCardGrid } from './projeto-card-grid'
-import { SecretariaAdminDashboard } from './secretaria-admin-dashboard'
+import { NovoProjetoDialogButton, SecretariaAdminDashboard } from './secretaria-admin-dashboard'
 import { SuperAdminDashboard } from './super-admin-dashboard'
 
 export default async function AdminPage() {
@@ -22,7 +22,7 @@ export default async function AdminPage() {
       />
 
       {session.role === 'super_admin' ? (
-        <SuperAdminDashboardData currentUsername={session.username} />
+        <SuperAdminDashboardData currentUsername={session.username} canEdit={session.canEdit !== false} />
       ) : session.role === 'secretaria_admin' ? (
         <SecretariaAdminDashboardData secretariaId={session.secretariaId} />
       ) : (
@@ -37,18 +37,21 @@ async function MeusProjetosData({ projetoIds }: { projetoIds: number[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2 className="text-lg font-semibold">Meus projetos</h2>
-        <p className="text-sm text-muted-foreground">
-          {projetos.length} projeto{projetos.length === 1 ? '' : 's'} sob sua responsabilidade
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Meus projetos</h2>
+          <p className="text-sm text-muted-foreground">
+            {projetos.length} projeto{projetos.length === 1 ? '' : 's'} sob sua responsabilidade
+          </p>
+        </div>
+        <NovoProjetoDialogButton />
       </div>
       <ProjetoCardGrid projetos={projetos} />
     </div>
   )
 }
 
-async function SuperAdminDashboardData({ currentUsername }: { currentUsername: string }) {
+async function SuperAdminDashboardData({ currentUsername, canEdit }: { currentUsername: string; canEdit: boolean }) {
   const [secretarias, admins, superAdmins, projetosResumo] = await Promise.all([
     getSecretarias(),
     getSecretariaAdmins(),
@@ -64,6 +67,7 @@ async function SuperAdminDashboardData({ currentUsername }: { currentUsername: s
       currentUsername={currentUsername}
       bootstrapUsername={process.env.ADMIN_USERNAME ?? null}
       projetosResumo={projetosResumo}
+      canEdit={canEdit}
     />
   )
 }

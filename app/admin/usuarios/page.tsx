@@ -44,7 +44,7 @@ export default async function UsuariosPage() {
         </Link>
       </div>
 
-      <UsuariosTable usuarios={usuarios} projetos={projetosGerenciaveis} />
+      <UsuariosTable usuarios={usuarios} projetos={projetosGerenciaveis} canEdit={session.canEdit !== false} />
     </main>
   )
 }

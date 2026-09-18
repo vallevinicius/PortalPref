@@ -18,6 +18,7 @@ type UsuarioParaSessao = {
   username: string
   role: Role
   secretariaId: number | null
+  canEdit: boolean
 }
 
 // Aplica a senha nova, limpa o código pendente e devolve a pessoa logada com uma
@@ -60,6 +61,7 @@ async function finalizePasswordChange(usuario: UsuarioParaSessao, novaSenha: str
     secretariaId: usuario.secretariaId,
     projetoIds,
     mustChangePassword: false,
+    canEdit: usuario.canEdit,
   })
   await setSessionCookie(token)
 
@@ -131,7 +133,7 @@ export async function definirNovaSenha(codigo: string, novaSenha: string) {
   }
 
   return finalizePasswordChange(
-    { id: session.userId, username: session.username, role: session.role, secretariaId: session.secretariaId },
+    { id: session.userId, username: session.username, role: session.role, secretariaId: session.secretariaId, canEdit: session.canEdit },
     senha,
   )
 }
@@ -162,6 +164,7 @@ async function findUsuarioParaRecuperacao(usernameOuEmail: string) {
       email: true,
       role: true,
       secretariaId: true,
+      canEdit: true,
       passwordResetToken: true,
       passwordResetExpires: true,
     },
@@ -242,7 +245,7 @@ export async function redefinirSenhaComCodigo(usernameOuEmail: string, codigo: s
   await clearLoginFailures(throttleKey, clientIdentifier)
 
   return finalizePasswordChange(
-    { id: usuario.id, username: usuario.username, role: usuario.role as Role, secretariaId: usuario.secretariaId },
+    { id: usuario.id, username: usuario.username, role: usuario.role as Role, secretariaId: usuario.secretariaId, canEdit: usuario.canEdit },
     senha,
   )
 }

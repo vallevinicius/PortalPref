@@ -14,7 +14,7 @@ const {
 } = vi.hoisted(() => ({
   bcryptMock: { compare: vi.fn(), hashSync: vi.fn().mockReturnValue('dummy-hash') },
   prismaMock: {
-    user: { findUnique: vi.fn(), update: vi.fn() },
+    user: { findFirst: vi.fn(), update: vi.fn() },
     projetoResponsavel: { findMany: vi.fn() },
   },
   createSessionTokenMock: vi.fn(),
@@ -75,16 +75,16 @@ describe('POST /api/auth/login', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'Usuário e senha são obrigatórios.' })
-    expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled()
     expect(getLoginThrottleStatusMock).not.toHaveBeenCalled()
   })
 
   it('retorna 401 e registra falha para usuário inexistente ou senha inválida', async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null)
+    prismaMock.user.findFirst.mockResolvedValue(null)
     const missingUserResponse = await POST(makeRequest({ username: 'unknown', password: 'secret' }))
     expect(missingUserResponse.status).toBe(401)
 
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 1,
       username: 'admin',
       email: null,
@@ -108,12 +108,12 @@ describe('POST /api/auth/login', () => {
     expect(response.status).toBe(429)
     expect(response.headers.get('retry-after')).toBe('420')
     await expect(response.json()).resolves.toEqual({ error: 'Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente.' })
-    expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled()
     expect(registerFailedLoginMock).not.toHaveBeenCalled()
   })
 
   it('cria sessão, limpa falhas anteriores e retorna o papel do usuário válido', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 7,
       username: 'saude-admin',
       email: null,
@@ -127,8 +127,8 @@ describe('POST /api/auth/login', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ ok: true, role: 'secretaria_admin', mustChangePassword: false })
-    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
-      where: { username: 'saude-admin' },
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: { OR: [{ username: 'saude-admin' }, { email: 'saude-admin' }] },
       select: {
         id: true,
         username: true,
@@ -137,6 +137,7 @@ describe('POST /api/auth/login', () => {
         role: true,
         secretariaId: true,
         mustChangePassword: true,
+        canEdit: true,
       },
     })
     expect(clearLoginFailuresMock).toHaveBeenCalledWith('saude-admin', '203.0.113.10')
@@ -154,8 +155,31 @@ describe('POST /api/auth/login', () => {
     expect(prismaMock.user.update).not.toHaveBeenCalled()
   })
 
+  it('permite logar digitando o e-mail em vez do nome de usuário', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({
+      id: 7,
+      username: 'saude-admin',
+      email: 'saude@prefeitura.gov.br',
+      passwordHash: 'hash',
+      role: 'secretaria_admin',
+      secretariaId: 10,
+      mustChangePassword: false,
+    })
+
+    const response = await POST(makeRequest({ username: 'saude@prefeitura.gov.br', password: 'secret' }))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: { OR: [{ username: 'saude@prefeitura.gov.br' }, { email: 'saude@prefeitura.gov.br' }] },
+      select: expect.any(Object),
+    })
+    expect(createSessionTokenMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 7, username: 'saude-admin' }),
+    )
+  })
+
   it('busca todos os projetos vinculados ao logar como responsável de projeto', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 40,
       username: 'joao.responsavel',
       email: null,
@@ -184,7 +208,7 @@ describe('POST /api/auth/login', () => {
   })
 
   it('quando a senha ainda é a padrão, gera código, envia e-mail e mesmo assim cria a sessão', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 8,
       username: 'saude-admin',
       email: 'saude@prefeitura.gov.br',
@@ -218,7 +242,7 @@ describe('POST /api/auth/login', () => {
   })
 
   it('não trava o login se o envio do e-mail de confirmação falhar', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 9,
       username: 'saude-admin',
       email: 'saude@prefeitura.gov.br',
@@ -236,7 +260,7 @@ describe('POST /api/auth/login', () => {
   })
 
   it('não envia e-mail de confirmação quando o usuário não tem e-mail cadastrado', async () => {
-    prismaMock.user.findUnique.mockResolvedValue({
+    prismaMock.user.findFirst.mockResolvedValue({
       id: 10,
       username: 'legado-admin',
       email: null,

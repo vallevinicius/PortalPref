@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { UserRole } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { recordAuditLog } from '@/lib/audit-log'
-import { requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
+import { assertCanEdit, requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
 import { isBootstrapAdminUsername } from '@/lib/bootstrap-admin'
 import { sendVerificationCodeEmail } from '@/lib/mail'
 import { DEFAULT_PASSWORD, generateRandomPassword, generateVerificationCode, VERIFICATION_CODE_DURATION_MS } from '@/lib/password'
@@ -42,6 +42,7 @@ function duplicateFieldError(err: unknown): Error | null {
 
 export async function createSecretariaUser(username: string, email: string, secretariaId: number) {
   const session = await requireSession('super_admin')
+  assertCanEdit(session)
 
   const trimmed = username.trim()
   if (!trimmed) {
@@ -85,8 +86,9 @@ export async function createSecretariaUser(username: string, email: string, secr
   return { username: trimmed, password }
 }
 
-export async function createSuperAdmin(username: string) {
+export async function createSuperAdmin(username: string, canEdit: boolean = true) {
   const session = await requireSession('super_admin')
+  assertCanEdit(session)
 
   const trimmed = username.trim()
   if (!trimmed) {
@@ -104,6 +106,7 @@ export async function createSuperAdmin(username: string) {
         passwordHash,
         role: UserRole.super_admin,
         secretariaId: null,
+        canEdit,
       },
     })
   } catch (err) {
@@ -119,7 +122,7 @@ export async function createSuperAdmin(username: string) {
     entityType: 'user',
     entityId: createdUser?.id,
     targetUserId: createdUser?.id,
-    details: { role: UserRole.super_admin, secretariaId: null },
+    details: { role: UserRole.super_admin, secretariaId: null, canEdit },
   })
 
   revalidatePath('/admin')
@@ -129,6 +132,7 @@ export async function createSuperAdmin(username: string) {
 
 export async function createProjetoUser(username: string, email: string, projetoId: number) {
   const session = await requireSession('super_admin', 'secretaria_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoOwnership(projetoId, session)
 
   const trimmed = username.trim()
@@ -177,6 +181,7 @@ export async function createProjetoUser(username: string, email: string, projeto
 
 export async function assignProjetoUser(userId: number, projetoId: number) {
   const session = await requireSession('super_admin', 'secretaria_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoOwnership(projetoId, session)
 
   const target = await prisma.user.findUnique({
@@ -221,6 +226,7 @@ export async function assignProjetoUser(userId: number, projetoId: number) {
 
 export async function unassignProjetoUser(userId: number, projetoId: number) {
   const session = await requireSession('super_admin', 'secretaria_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoOwnership(projetoId, session)
 
   const link = await prisma.projetoResponsavel.findUnique({
@@ -291,6 +297,7 @@ async function getManageableUser(userId: number, session: SessionPayload, option
 // de propósito, para que quem gerencia usuários por aqui nunca precise ter acesso a ela.
 export async function updateUserProfile(userId: number, username: string, email: string) {
   const session = await requireSession('super_admin', 'secretaria_admin')
+  assertCanEdit(session)
   const target = await getManageableUser(userId, session)
 
   if (isBootstrapAdminUsername(target.username)) {
@@ -328,14 +335,20 @@ export async function updateUserProfile(userId: number, username: string, email:
   revalidatePath('/admin/usuarios')
 }
 
-// Exclui um secretário ou responsável de projeto. Remove também os vínculos dele com
-// projetos (projetoResponsavel), mas não mexe nos projetos, indicadores ou secretarias em si.
+// Exclui um secretário, responsável de projeto ou (só quando quem chama é admin supremo)
+// outro admin supremo. Remove também os vínculos dele com projetos (projetoResponsavel),
+// mas não mexe nos projetos, indicadores ou secretarias em si.
 export async function deleteUser(userId: number) {
   const session = await requireSession('super_admin', 'secretaria_admin')
-  const target = await getManageableUser(userId, session)
+  assertCanEdit(session)
+  const target = await getManageableUser(userId, session, { allowSuperAdminTarget: true })
 
   if (isBootstrapAdminUsername(target.username)) {
     throw new Error('Este usuário é definido pelo .env do servidor e não pode ser excluído por aqui.')
+  }
+
+  if (target.id === session.userId) {
+    throw new Error('Você não pode excluir a sua própria conta.')
   }
 
   await prisma.user.delete({ where: { id: userId } })
@@ -357,6 +370,7 @@ export async function deleteUser(userId: number) {
 // login, só que iniciado por um administrador em nome da pessoa.
 export async function enviarRedefinicaoSenha(userId: number) {
   const session = await requireSession('super_admin', 'secretaria_admin')
+  assertCanEdit(session)
   const target = await getManageableUser(userId, session, { allowSuperAdminTarget: true })
 
   if (isBootstrapAdminUsername(target.username)) {

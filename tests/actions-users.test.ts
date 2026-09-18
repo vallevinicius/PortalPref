@@ -43,7 +43,7 @@ const {
 
 vi.mock('bcryptjs', () => ({ default: bcryptMock }))
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
-vi.mock('@/lib/auth', () => ({ requireSession: requireSessionMock, UnauthorizedError: UnauthorizedErrorMock }))
+vi.mock('@/lib/auth', () => ({ requireSession: requireSessionMock, UnauthorizedError: UnauthorizedErrorMock, assertCanEdit: vi.fn() }))
 vi.mock('@/lib/mail', () => ({ sendVerificationCodeEmail: sendVerificationCodeEmailMock }))
 vi.mock('@/lib/password', () => ({
   generateRandomPassword: generateRandomPasswordMock,
@@ -121,6 +121,23 @@ describe('ações de usuários e credenciais', () => {
         passwordHash: 'hash-gerado',
         role: 'super_admin',
         secretariaId: null,
+        canEdit: true,
+      },
+    })
+  })
+
+  it('cria super admin apenas para visualização quando o nível de acesso é restrito', async () => {
+    await expect(createSuperAdmin('viceprefeita', false)).resolves.toEqual({
+      username: 'viceprefeita',
+      password: 'SenhaGerada1',
+    })
+    expect(prismaMock.user.create).toHaveBeenCalledWith({
+      data: {
+        username: 'viceprefeita',
+        passwordHash: 'hash-gerado',
+        role: 'super_admin',
+        secretariaId: null,
+        canEdit: false,
       },
     })
   })
@@ -387,13 +404,27 @@ describe('ações de usuários e credenciais', () => {
       expect(revalidatePathMock).toHaveBeenCalledWith('/admin/usuarios')
     })
 
-    it('rejeita quando o usuário não existe ou não é secretário/responsável de projeto', async () => {
+    it('rejeita quando o usuário não existe', async () => {
       prismaMock.user.findUnique.mockResolvedValue(null)
       await expect(deleteUser(999)).rejects.toThrow('Usuário não encontrado.')
 
-      prismaMock.user.findUnique.mockResolvedValue({ id: 1, username: 'root', role: 'super_admin' })
-      await expect(deleteUser(1)).rejects.toThrow('Usuário não encontrado.')
+      expect(prismaMock.user.delete).not.toHaveBeenCalled()
+    })
 
+    it('permite ao admin supremo excluir outro admin supremo, mas bloqueia excluir a própria conta', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({ id: 77, username: 'prefeita', role: 'super_admin' })
+      await deleteUser(77)
+      expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 77 } })
+
+      prismaMock.user.findUnique.mockResolvedValue({ id: 1, username: 'root', role: 'super_admin' })
+      await expect(deleteUser(1)).rejects.toThrow('Você não pode excluir a sua própria conta.')
+    })
+
+    it('bloqueia secretaria de excluir um admin supremo', async () => {
+      requireSessionMock.mockResolvedValue({ userId: 3, username: 'secretaria', role: 'secretaria_admin', secretariaId: 10 })
+      prismaMock.user.findUnique.mockResolvedValue({ id: 77, username: 'prefeita', role: 'super_admin', projetosResponsavel: [] })
+
+      await expect(deleteUser(77)).rejects.toBeInstanceOf(UnauthorizedErrorMock)
       expect(prismaMock.user.delete).not.toHaveBeenCalled()
     })
 

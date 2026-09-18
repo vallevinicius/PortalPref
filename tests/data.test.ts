@@ -186,13 +186,13 @@ describe('lib/data', () => {
   })
 
   it('lista super admins pelo nome', async () => {
-    prismaMock.user.findMany.mockResolvedValue([{ id: 4, username: 'admin' }])
+    prismaMock.user.findMany.mockResolvedValue([{ id: 4, username: 'admin', canEdit: true }])
 
-    await expect(getSuperAdmins()).resolves.toEqual([{ id: 4, username: 'admin' }])
+    await expect(getSuperAdmins()).resolves.toEqual([{ id: 4, username: 'admin', canEdit: true }])
     expect(prismaMock.user.findMany).toHaveBeenCalledWith({
       where: { role: 'super_admin' },
       orderBy: { username: 'asc' },
-      select: { id: true, username: true },
+      select: { id: true, username: true, canEdit: true },
     })
   })
 

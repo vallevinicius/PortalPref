@@ -13,6 +13,7 @@ export type SessionPayload = {
   secretariaId: number | null
   projetoIds: number[]
   mustChangePassword: boolean
+  canEdit: boolean
 }
 
 function getSecretKey() {
@@ -71,4 +72,15 @@ export async function requireSession(...allowedRoles: Role[]) {
     throw new UnauthorizedError('Acesso não autorizado.')
   }
   return session
+}
+
+// Só o admin supremo pode ser "apenas visualização" (perfil da prefeita, que acompanha
+// todas as secretarias mas não deve alterar nada). Outros papéis já têm suas restrições
+// de escopo garantidas pelos próprios helpers de autorização.
+export function assertCanEdit(session: SessionPayload) {
+  // Sessões emitidas antes de existir "canEdit" não têm esse campo no token
+  // (undefined) — trata como acesso completo, só bloqueia quando é false mesmo.
+  if (session.role === 'super_admin' && session.canEdit === false) {
+    throw new UnauthorizedError('Sua conta tem acesso apenas de visualização.')
+  }
 }

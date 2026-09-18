@@ -30,6 +30,7 @@ model User {
   email            String?    @unique @db.VarChar(255)
   passwordHash     String     @map("password_hash") @db.VarChar(255)
   mustChangePassword Boolean  @default(false) @map("must_change_password")
+  canEdit          Boolean    @default(true) @map("can_edit")
   passwordResetToken String? @unique @map("password_reset_token") @db.VarChar(255)
   passwordResetExpires DateTime? @map("password_reset_expires")
   role             UserRole

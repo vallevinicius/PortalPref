@@ -39,6 +39,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/auth', () => ({
   requireSession: requireSessionMock,
   UnauthorizedError: UnauthorizedErrorMock,
+  assertCanEdit: vi.fn(),
 }))
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }))
 

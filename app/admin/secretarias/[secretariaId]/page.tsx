@@ -49,15 +49,17 @@ export default async function SecretariaDetailPage({ params }: { params: Promise
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Novo projeto</CardTitle>
-            <CardDescription>Como super administrador, você pode criar um projeto dentro desta secretaria.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <NovoProjetoForm secretariaId={secretaria.id} />
-          </CardContent>
-        </Card>
+        {session.canEdit !== false && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Novo projeto</CardTitle>
+              <CardDescription>Como super administrador, você pode criar um projeto dentro desta secretaria.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <NovoProjetoForm secretariaId={secretaria.id} />
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-semibold">Projetos e números</h3>

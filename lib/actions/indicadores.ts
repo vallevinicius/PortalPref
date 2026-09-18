@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
+import { assertCanEdit, requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
 import { recordAuditLog } from '@/lib/audit-log'
 import { prisma } from '@/lib/prisma'
 
@@ -102,6 +102,7 @@ export async function createIndicador(
   dataReferencia: string,
 ) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoAccess(projetoId, session)
   const validated = validateIndicador(titulo, valor, dataReferencia)
 
@@ -145,6 +146,7 @@ export async function createIndicador(
 
 export async function renameIndicadorGrupo(projetoId: number, tituloAtual: string, novoTitulo: string) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoAccess(projetoId, session)
 
   const trimmed = novoTitulo.trim()
@@ -191,6 +193,7 @@ export async function updateIndicador(
   dataReferencia: string,
 ) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const indicador = await assertIndicadorAccess(indicadorId, session)
   const validated = validateIndicador(titulo, valor, dataReferencia)
 
@@ -224,6 +227,7 @@ export async function updateIndicador(
 
 export async function deleteIndicador(indicadorId: number) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const indicador = await assertIndicadorAccess(indicadorId, session)
 
   await prisma.indicador.delete({ where: { id: indicadorId } })
@@ -243,6 +247,7 @@ export async function deleteIndicador(indicadorId: number) {
 
 export async function deleteIndicadorGrupo(projetoId: number, titulo: string) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoAccess(projetoId, session)
 
   const result = await prisma.indicador.deleteMany({ where: { projetoId, titulo } })
@@ -272,6 +277,7 @@ export async function setIndicadorEscala(
   crescenteMelhor: boolean,
 ) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoAccess(projetoId, session)
 
   if (!Number.isFinite(valorMinimo) || !Number.isFinite(valorMaximo)) {
@@ -301,6 +307,7 @@ export async function setIndicadorEscala(
 
 export async function removeIndicadorEscala(projetoId: number, titulo: string) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const projeto = await assertProjetoAccess(projetoId, session)
 
   await prisma.indicadorEscala.deleteMany({ where: { projetoId, titulo } })

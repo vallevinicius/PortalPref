@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
+import { assertCanEdit, createSessionToken, requireSession, setSessionCookie, UnauthorizedError, type SessionPayload } from '@/lib/auth'
 import { recordAuditLog } from '@/lib/audit-log'
 import { prisma } from '@/lib/prisma'
 
@@ -45,8 +45,24 @@ export async function createProjeto(
   prazoAtualizacaoDias: number,
   secretariaId?: number,
 ) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
-  const targetSecretariaId = session.role === 'super_admin' ? secretariaId : session.secretariaId
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
+
+  let targetSecretariaId: number | null | undefined
+  if (session.role === 'super_admin') {
+    targetSecretariaId = secretariaId
+  } else if (session.role === 'secretaria_admin') {
+    targetSecretariaId = session.secretariaId
+    if (secretariaId !== undefined && secretariaId !== session.secretariaId) {
+      throw new UnauthorizedError('Você só pode criar projetos na sua secretaria.')
+    }
+  } else {
+    // projeto_admin: a secretaria é sempre a mesma dos projetos que ele já é responsável.
+    const projetoExistente = session.projetoIds[0]
+      ? await prisma.projeto.findUnique({ where: { id: session.projetoIds[0] }, select: { secretariaId: true } })
+      : null
+    targetSecretariaId = projetoExistente?.secretariaId ?? null
+  }
 
   if (!targetSecretariaId) {
     throw new UnauthorizedError(
@@ -54,10 +70,6 @@ export async function createProjeto(
         ? 'Informe a secretaria do projeto.'
         : 'Sua conta não está vinculada a uma secretaria.',
     )
-  }
-
-  if (session.role === 'secretaria_admin' && secretariaId !== undefined && secretariaId !== session.secretariaId) {
-    throw new UnauthorizedError('Você só pode criar projetos na sua secretaria.')
   }
 
   const trimmed = nome.trim()
@@ -84,6 +96,9 @@ export async function createProjeto(
       responsavelTelefone: trimmedResponsavelTelefone,
       prazoAtualizacaoDias,
       createdBy: session.userId,
+      // O responsável de projeto que cria um projeto novo já entra como responsável
+      // dele, senão ele criaria um projeto que nem consegue acessar depois.
+      ...(session.role === 'projeto_admin' ? { responsaveis: { create: { userId: session.userId } } } : {}),
     },
   })
 
@@ -97,10 +112,23 @@ export async function createProjeto(
 
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${targetSecretariaId}`)
+
+  // Atualiza a sessão do responsável de projeto na hora, senão ele fica sem acesso ao
+  // projeto que acabou de criar até fazer login de novo (o token antigo não sabe do projeto novo).
+  if (session.role === 'projeto_admin') {
+    const token = await createSessionToken({
+      ...session,
+      projetoIds: [...session.projetoIds, projeto.id],
+    })
+    await setSessionCookie(token)
+  }
+
+  return { id: projeto.id }
 }
 
 export async function setPrazoAtualizacao(projetoId: number, prazoAtualizacaoDias: number) {
   const session = await requireSession('super_admin', 'secretaria_admin')
+  assertCanEdit(session)
   const projeto = await getAuthorizedProjeto(projetoId, session)
 
   if (!Number.isInteger(prazoAtualizacaoDias) || prazoAtualizacaoDias <= 0) {
@@ -133,6 +161,7 @@ export async function updateProjeto(
   responsavelTelefone: string,
 ) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
   const projeto = await getAuthorizedProjeto(projetoId, session)
 
   const trimmed = nome.trim()
@@ -171,6 +200,7 @@ export async function updateProjeto(
 
 export async function deleteProjeto(projetoId: number) {
   const session = await requireSession('super_admin', 'secretaria_admin')
+  assertCanEdit(session)
   const projeto = await getAuthorizedProjeto(projetoId, session)
 
   await prisma.projeto.delete({ where: { id: projetoId } })

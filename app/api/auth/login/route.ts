@@ -27,8 +27,8 @@ export async function POST(request: Request) {
     )
   }
 
-  const user = await prisma.user.findUnique({
-    where: { username },
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ username }, { email: username }] },
     select: {
       id: true,
       username: true,
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       role: true,
       secretariaId: true,
       mustChangePassword: true,
+      canEdit: true,
     },
   })
 
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
     secretariaId: user.secretariaId,
     projetoIds,
     mustChangePassword,
+    canEdit: user.canEdit,
   })
   await setSessionCookie(token)
 

@@ -29,10 +29,37 @@ function cargoLabel(role: UsuarioResumo['role']) {
   return role === 'secretaria_admin' ? 'Secretário' : 'Responsável de projeto'
 }
 
-function projetosLabel(usuario: UsuarioResumo) {
-  if (usuario.role === 'secretaria_admin') return '—'
-  if (usuario.projetos.length === 0) return '—'
-  return usuario.projetos.map((p) => p.nome).join(', ')
+const PROJETOS_VISIVEIS = 2
+
+function ProjetosCell({ usuario }: { usuario: UsuarioResumo }) {
+  const [expandido, setExpandido] = useState(false)
+
+  if (usuario.role === 'secretaria_admin' || usuario.projetos.length === 0) {
+    return <span className="text-muted-foreground">—</span>
+  }
+
+  const podeRecolher = usuario.projetos.length > PROJETOS_VISIVEIS
+  const visiveis = expandido || !podeRecolher ? usuario.projetos : usuario.projetos.slice(0, PROJETOS_VISIVEIS)
+  const ocultos = podeRecolher && !expandido ? usuario.projetos.length - PROJETOS_VISIVEIS : 0
+
+  return (
+    <div className="flex max-w-xs flex-wrap gap-1">
+      {visiveis.map((projeto) => (
+        <Badge key={projeto.id} variant="outline" className="font-normal">
+          {projeto.nome}
+        </Badge>
+      ))}
+      {podeRecolher && (
+        <button
+          type="button"
+          onClick={() => setExpandido((v) => !v)}
+          className="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+        >
+          {expandido ? 'ver menos' : `+${ocultos} mais`}
+        </button>
+      )}
+    </div>
+  )
 }
 
 function ProjetosDoUsuario({ usuario, projetosDaSecretaria }: { usuario: UsuarioResumo; projetosDaSecretaria: ProjetoResumo[] }) {
@@ -291,7 +318,7 @@ function RedefinirSenhaDialog({
   )
 }
 
-function UsuarioRow({ usuario, projetos }: { usuario: UsuarioResumo; projetos: ProjetoResumo[] }) {
+function UsuarioRow({ usuario, projetos, canEdit }: { usuario: UsuarioResumo; projetos: ProjetoResumo[]; canEdit: boolean }) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -308,26 +335,34 @@ function UsuarioRow({ usuario, projetos }: { usuario: UsuarioResumo; projetos: P
       <td className="px-3 py-2">
         <Badge variant={usuario.role === 'secretaria_admin' ? 'default' : 'secondary'}>{cargoLabel(usuario.role)}</Badge>
       </td>
-      <td className="px-3 py-2 text-muted-foreground">{projetosLabel(usuario)}</td>
+      <td className="px-3 py-2">
+        <ProjetosCell usuario={usuario} />
+      </td>
       <td className="px-3 py-2 text-right">
-        <Button variant="ghost" size="icon-sm" onClick={() => setResetOpen(true)} aria-label={`Redefinir senha de ${usuario.username}`}>
-          <Mail className="size-3.5" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)} aria-label={`Editar ${usuario.username}`}>
-          <Pencil className="size-3.5" />
-        </Button>
-        <Button variant="ghost" size="icon-sm" onClick={() => setDeleteOpen(true)} aria-label={`Excluir ${usuario.username}`}>
-          <Trash2 className="size-3.5" />
-        </Button>
-        <RedefinirSenhaDialog usuario={usuario} open={resetOpen} onOpenChange={setResetOpen} />
-        <EditarUsuarioDialog usuario={usuario} projetosDaSecretaria={projetosDaSecretaria} open={editOpen} onOpenChange={setEditOpen} />
-        <ExcluirUsuarioDialog usuario={usuario} open={deleteOpen} onOpenChange={setDeleteOpen} />
+        {canEdit ? (
+          <>
+            <Button variant="ghost" size="icon-sm" onClick={() => setResetOpen(true)} aria-label={`Redefinir senha de ${usuario.username}`}>
+              <Mail className="size-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon-sm" onClick={() => setEditOpen(true)} aria-label={`Editar ${usuario.username}`}>
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon-sm" onClick={() => setDeleteOpen(true)} aria-label={`Excluir ${usuario.username}`}>
+              <Trash2 className="size-3.5" />
+            </Button>
+            <RedefinirSenhaDialog usuario={usuario} open={resetOpen} onOpenChange={setResetOpen} />
+            <EditarUsuarioDialog usuario={usuario} projetosDaSecretaria={projetosDaSecretaria} open={editOpen} onOpenChange={setEditOpen} />
+            <ExcluirUsuarioDialog usuario={usuario} open={deleteOpen} onOpenChange={setDeleteOpen} />
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
       </td>
     </tr>
   )
 }
 
-function UsuariosTabela({ usuarios, projetos }: { usuarios: UsuarioResumo[]; projetos: ProjetoResumo[] }) {
+function UsuariosTabela({ usuarios, projetos, canEdit }: { usuarios: UsuarioResumo[]; projetos: ProjetoResumo[]; canEdit: boolean }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -342,7 +377,7 @@ function UsuariosTabela({ usuarios, projetos }: { usuarios: UsuarioResumo[]; pro
         </thead>
         <tbody>
           {usuarios.map((usuario) => (
-            <UsuarioRow key={usuario.id} usuario={usuario} projetos={projetos} />
+            <UsuarioRow key={usuario.id} usuario={usuario} projetos={projetos} canEdit={canEdit} />
           ))}
         </tbody>
       </table>
@@ -381,7 +416,7 @@ function agruparPorSecretaria(usuarios: UsuarioResumo[]): GrupoSecretaria[] {
   })
 }
 
-function GrupoSecretariaCard({ grupo, projetos }: { grupo: GrupoSecretaria; projetos: ProjetoResumo[] }) {
+function GrupoSecretariaCard({ grupo, projetos, canEdit }: { grupo: GrupoSecretaria; projetos: ProjetoResumo[]; canEdit: boolean }) {
   const [open, setOpen] = useState(true)
   const Icon = grupo.secretariaNome ? getSecretariaIcon(grupo.secretariaNome) : UserX
 
@@ -406,14 +441,22 @@ function GrupoSecretariaCard({ grupo, projetos }: { grupo: GrupoSecretaria; proj
       </button>
       {open && (
         <CardContent className="p-0">
-          <UsuariosTabela usuarios={grupo.usuarios} projetos={projetos} />
+          <UsuariosTabela usuarios={grupo.usuarios} projetos={projetos} canEdit={canEdit} />
         </CardContent>
       )}
     </Card>
   )
 }
 
-export function UsuariosTable({ usuarios, projetos }: { usuarios: UsuarioResumo[]; projetos: ProjetoResumo[] }) {
+export function UsuariosTable({
+  usuarios,
+  projetos,
+  canEdit,
+}: {
+  usuarios: UsuarioResumo[]
+  projetos: ProjetoResumo[]
+  canEdit: boolean
+}) {
   const [busca, setBusca] = useState('')
 
   const usuariosFiltrados = useMemo(() => {
@@ -453,7 +496,7 @@ export function UsuariosTable({ usuarios, projetos }: { usuarios: UsuarioResumo[
       ) : (
         <div className="flex flex-col gap-4">
           {grupos.map((grupo) => (
-            <GrupoSecretariaCard key={grupo.secretariaId ?? 'sem-secretaria'} grupo={grupo} projetos={projetos} />
+            <GrupoSecretariaCard key={grupo.secretariaId ?? 'sem-secretaria'} grupo={grupo} projetos={projetos} canEdit={canEdit} />
           ))}
         </div>
       )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, KeyRound, Mail, PieChart as PieChartIcon, Plus, ScrollText, Search, ShieldPlus, Users, UserPlus } from 'lucide-react'
+import { AlertTriangle, KeyRound, Mail, PieChart as PieChartIcon, Plus, ScrollText, Search, ShieldPlus, Trash2, Users, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
@@ -42,7 +42,7 @@ import {
 import { GeneratedPasswordBanner, type Credential } from './credential-components'
 import { createSecretaria } from '@/lib/actions/secretarias'
 import { cn } from '@/lib/utils'
-import { createProjetoUser, createSecretariaUser, createSuperAdmin, enviarRedefinicaoSenha } from '@/lib/actions/users'
+import { createProjetoUser, createSecretariaUser, createSuperAdmin, deleteUser, enviarRedefinicaoSenha } from '@/lib/actions/users'
 import type { ProjetoResumo, Secretaria, SecretariaAdmin, SuperAdmin } from '@/lib/data'
 import { calcularStatusAtualizacao } from '@/lib/prazo-atualizacao'
 import { getSecretariaIcon } from '@/lib/secretaria-icon'
@@ -537,6 +537,8 @@ function SecretariaGrid({ secretarias, admins }: { secretarias: Secretaria[]; ad
   )
 }
 
+type NivelAcesso = 'completo' | 'visualizacao'
+
 function NovoSuperAdminDialog({
   open,
   onOpenChange,
@@ -548,14 +550,20 @@ function NovoSuperAdminDialog({
 }) {
   const router = useRouter()
   const [username, setUsername] = useState('')
+  const [nivelAcesso, setNivelAcesso] = useState<NivelAcesso>('completo')
   const [isPending, startTransition] = useTransition()
+
+  function resetForm() {
+    setUsername('')
+    setNivelAcesso('completo')
+  }
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     startTransition(async () => {
       try {
-        const credential = await createSuperAdmin(username)
-        setUsername('')
+        const credential = await createSuperAdmin(username, nivelAcesso === 'completo')
+        resetForm()
         onOpenChange(false)
         onCreated(credential)
         toast.success('Usuário supremo criado.')
@@ -571,7 +579,7 @@ function NovoSuperAdminDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next)
-        if (!next) setUsername('')
+        if (!next) resetForm()
       }}
     >
       <DialogContent className="sm:max-w-lg">
@@ -583,9 +591,23 @@ function NovoSuperAdminDialog({
             <Label htmlFor="novo-supremo-nome">Usuário de acesso</Label>
             <Input id="novo-supremo-nome" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Ex.: viceprefeita" required />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Esse usuário terá o mesmo nível de acesso que o seu: vê e gerencia todas as secretarias.
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="novo-supremo-nivel">Nível de acesso</Label>
+            <Select value={nivelAcesso} onValueChange={(value) => setNivelAcesso((value ?? 'completo') as NivelAcesso)}>
+              <SelectTrigger id="novo-supremo-nivel" className="w-full">
+                <SelectValue>{(value: string | null) => (value === 'visualizacao' ? 'Apenas visualização' : 'Completo (editar)')}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="completo">Completo (editar)</SelectItem>
+                <SelectItem value="visualizacao">Apenas visualização</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {nivelAcesso === 'completo'
+                ? 'Vê e gerencia todas as secretarias, com o mesmo nível de acesso que o seu.'
+                : 'Só acompanha os números de todas as secretarias. Não pode criar, editar ou excluir nada (ex.: perfil da prefeita).'}
+            </p>
+          </div>
           <Button type="submit" disabled={isPending} className="mt-1">
             {isPending ? 'Criando...' : 'Criar usuário supremo'}
           </Button>
@@ -599,13 +621,18 @@ function SuperAdminRow({
   superAdmin,
   isCurrentUser,
   isBootstrapAdmin,
+  canEdit,
 }: {
   superAdmin: SuperAdmin
   isCurrentUser: boolean
   isBootstrapAdmin: boolean
+  canEdit: boolean
 }) {
+  const router = useRouter()
   const [sendingReset, setSendingReset] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   if (isBootstrapAdmin) {
     return (
@@ -614,7 +641,7 @@ function SuperAdminRow({
           {superAdmin.username}
           {isCurrentUser && <span className="ml-2 text-xs font-sans text-muted-foreground">(você)</span>}
         </span>
-        <span className="text-xs text-muted-foreground">Senha definida pelo .env do servidor</span>
+        <span className="text-xs text-muted-foreground">Senha definida pela Equipe LAB-ISA</span>
       </div>
     )
   }
@@ -632,16 +659,40 @@ function SuperAdminRow({
       .finally(() => setSendingReset(false))
   }
 
+  function handleDelete() {
+    setDeleting(true)
+    deleteUser(superAdmin.id)
+      .then(() => {
+        toast.success(`Usuário supremo "${superAdmin.username}" excluído.`)
+        setConfirmDeleteOpen(false)
+        router.refresh()
+      })
+      .catch((err) => {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível excluir o usuário.')
+      })
+      .finally(() => setDeleting(false))
+  }
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-      <span className="font-mono text-sm">
+      <span className="flex items-center gap-2 font-mono text-sm">
         {superAdmin.username}
-        {isCurrentUser && <span className="ml-2 text-xs font-sans text-muted-foreground">(você)</span>}
+        {isCurrentUser && <span className="text-xs font-sans text-muted-foreground">(você)</span>}
+        {!superAdmin.canEdit && <Badge variant="secondary" className="font-sans font-normal">Apenas visualização</Badge>}
       </span>
-      <Button variant="outline" size="sm" onClick={() => setConfirmResetOpen(true)} disabled={sendingReset} className="gap-1.5">
-        <Mail className="size-3.5" />
-        {sendingReset ? 'Enviando...' : 'Redefinir senha por e-mail'}
-      </Button>
+      {canEdit && (
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setConfirmResetOpen(true)} disabled={sendingReset} className="gap-1.5">
+            <Mail className="size-3.5" />
+            {sendingReset ? 'Enviando...' : 'Redefinir senha por e-mail'}
+          </Button>
+          {!isCurrentUser && (
+            <Button variant="outline" size="icon-sm" onClick={() => setConfirmDeleteOpen(true)} aria-label={`Excluir ${superAdmin.username}`}>
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      )}
 
       <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
         <AlertDialogContent>
@@ -661,6 +712,26 @@ function SuperAdminRow({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {!isCurrentUser && (
+        <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir usuário supremo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso vai excluir o acesso de &ldquo;{superAdmin.username}&rdquo; como administrador supremo. Essa ação não
+                pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} disabled={deleting}>
+                {deleting ? 'Excluindo...' : 'Excluir'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   )
 }
@@ -669,10 +740,12 @@ function SuperAdminsSection({
   superAdmins,
   currentUsername,
   bootstrapUsername,
+  canEdit,
 }: {
   superAdmins: SuperAdmin[]
   currentUsername: string
   bootstrapUsername: string | null
+  canEdit: boolean
 }) {
   const [createOpen, setCreateOpen] = useState(false)
   const [revealedCredential, setRevealedCredential] = useState<Credential | null>(null)
@@ -688,12 +761,15 @@ function SuperAdminsSection({
           <GeneratedPasswordBanner credential={revealedCredential} onDismiss={() => setRevealedCredential(null)} />
         )}
 
-        <Button onClick={() => setCreateOpen(true)} className="w-fit gap-1.5">
-          <ShieldPlus className="size-4" />
-          Novo usuário supremo
-        </Button>
-
-        <NovoSuperAdminDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={setRevealedCredential} />
+        {canEdit && (
+          <>
+            <Button onClick={() => setCreateOpen(true)} className="w-fit gap-1.5">
+              <ShieldPlus className="size-4" />
+              Novo usuário supremo
+            </Button>
+            <NovoSuperAdminDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={setRevealedCredential} />
+          </>
+        )}
 
         <div className="flex flex-col gap-2">
           {superAdmins.map((superAdmin) => (
@@ -702,6 +778,7 @@ function SuperAdminsSection({
               superAdmin={superAdmin}
               isCurrentUser={superAdmin.username === currentUsername}
               isBootstrapAdmin={bootstrapUsername !== null && superAdmin.username === bootstrapUsername}
+              canEdit={canEdit}
             />
           ))}
         </div>
@@ -757,6 +834,7 @@ export function SuperAdminDashboard({
   currentUsername,
   bootstrapUsername,
   projetosResumo,
+  canEdit,
 }: {
   secretarias: Secretaria[]
   admins: SecretariaAdmin[]
@@ -764,6 +842,7 @@ export function SuperAdminDashboard({
   currentUsername: string
   bootstrapUsername: string | null
   projetosResumo: ProjetoResumo[]
+  canEdit: boolean
 }) {
   const [createOpen, setCreateOpen] = useState(false)
   const [novoUsuarioOpen, setNovoUsuarioOpen] = useState(false)
@@ -796,16 +875,26 @@ export function SuperAdminDashboard({
             <Users className="size-4" />
             Ver usuários
           </Link>
-          <Button variant="outline" onClick={() => setNovoUsuarioOpen(true)} className="gap-1.5">
-            <UserPlus className="size-4" />
-            Novo usuário
-          </Button>
-          <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-            <Plus className="size-4" />
-            Nova secretaria
-          </Button>
+          {canEdit && (
+            <>
+              <Button variant="outline" onClick={() => setNovoUsuarioOpen(true)} className="gap-1.5">
+                <UserPlus className="size-4" />
+                Novo usuário
+              </Button>
+              <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+                <Plus className="size-4" />
+                Nova secretaria
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {!canEdit && (
+        <p className="text-sm text-muted-foreground">
+          Sua conta tem acesso apenas de visualização: você acompanha os números de todas as secretarias, mas não pode criar, editar ou excluir nada.
+        </p>
+      )}
 
       {revealedCredential && (
         <GeneratedPasswordBanner credential={revealedCredential} onDismiss={() => setRevealedCredential(null)} />
@@ -823,16 +912,20 @@ export function SuperAdminDashboard({
         />
       </div>
 
-      <NovaSecretariaDialog open={createOpen} onOpenChange={setCreateOpen} secretarias={secretarias} />
+      {canEdit && (
+        <>
+          <NovaSecretariaDialog open={createOpen} onOpenChange={setCreateOpen} secretarias={secretarias} />
 
-      <NovoUsuarioDialog
-        open={novoUsuarioOpen}
-        onOpenChange={setNovoUsuarioOpen}
-        secretarias={secretarias}
-        admins={admins}
-        projetosResumo={projetosResumo}
-        onCreated={setRevealedCredential}
-      />
+          <NovoUsuarioDialog
+            open={novoUsuarioOpen}
+            onOpenChange={setNovoUsuarioOpen}
+            secretarias={secretarias}
+            admins={admins}
+            projetosResumo={projetosResumo}
+            onCreated={setRevealedCredential}
+          />
+        </>
+      )}
 
       <div className="flex justify-start">
         <Link href="/admin/audit-log" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
@@ -847,7 +940,7 @@ export function SuperAdminDashboard({
         <SecretariaGrid secretarias={secretariasFiltradas} admins={admins} />
       )}
 
-      <SuperAdminsSection superAdmins={superAdmins} currentUsername={currentUsername} bootstrapUsername={bootstrapUsername} />
+      <SuperAdminsSection superAdmins={superAdmins} currentUsername={currentUsername} bootstrapUsername={bootstrapUsername} canEdit={canEdit} />
     </div>
   )
 }
