@@ -95,7 +95,7 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
           </div>
         )}
 
-        <ProjetoDashboard projeto={projeto} editable={editable} canDeleteProject={canManageUsers} />
+        <ProjetoDashboard projeto={projeto} editable={editable} canDeleteProject={isSuperAdmin && session.canEdit !== false} />
       </div>
     </main>
   )

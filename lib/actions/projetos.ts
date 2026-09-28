@@ -199,7 +199,7 @@ export async function updateProjeto(
 }
 
 export async function deleteProjeto(projetoId: number) {
-  const session = await requireSession('super_admin', 'secretaria_admin')
+  const session = await requireSession('super_admin')
   assertCanEdit(session)
   const projeto = await getAuthorizedProjeto(projetoId, session)
 

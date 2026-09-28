@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
+import { getClientIpFromRequest } from '@/lib/request-ip'
 
 export const LOGIN_MAX_FAILURES = 5
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000
@@ -21,16 +22,18 @@ function hashKey(value: string) {
 
 function getThrottleKeys(username: string, clientIdentifier: string) {
   const normalizedUsername = normalizeUsername(username)
+  // "unknown" agora é um valor fixo (nunca controlado pelo cliente — ver getClientIpFromRequest),
+  // então também vira um balde de contagem próprio, e não um escape do limite por origem.
   const normalizedClient = clientIdentifier.trim().slice(0, 255) || 'unknown'
 
-  const keys = [hashKey(`username:${normalizedUsername}`)]
-  if (normalizedClient !== 'unknown') keys.push(hashKey(`client:${normalizedClient}`))
-  return keys
+  return [hashKey(`username:${normalizedUsername}`), hashKey(`client:${normalizedClient}`)]
 }
 
+// Usa só o IP gravado pelo proxy confiável (X-Real-IP/X-Forwarded-For já normalizados
+// pela infraestrutura). Nunca confia em headers como o cliente os enviou: era assim que o
+// limite por origem era contornado trocando o valor a cada requisição.
 export function getLoginClientIdentifier(request: Request) {
-  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  return forwardedFor || request.headers.get('x-real-ip')?.trim() || 'unknown'
+  return getClientIpFromRequest(request) ?? 'unknown'
 }
 
 export async function getLoginThrottleStatus(username: string, clientIdentifier: string): Promise<LoginThrottleStatus> {

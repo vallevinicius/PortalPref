@@ -1,7 +1,6 @@
 'use server'
 
 import bcrypt from 'bcryptjs'
-import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { recordAuditLog } from '@/lib/audit-log'
 import { createSessionToken, getSession, setSessionCookie, type Role } from '@/lib/auth'
@@ -10,6 +9,7 @@ import { clearLoginFailures, getLoginThrottleStatus, registerFailedLogin } from 
 import { sendVerificationCodeEmail } from '@/lib/mail'
 import { generateVerificationCode, hashVerificationCode, VERIFICATION_CODE_DURATION_MS } from '@/lib/password'
 import { prisma } from '@/lib/prisma'
+import { getClientIpFromHeaders } from '@/lib/request-ip'
 
 const MIN_PASSWORD_LENGTH = 6
 
@@ -140,10 +140,10 @@ export async function definirNovaSenha(codigo: string, novaSenha: string) {
 
 // --- "Esqueci minha senha" (sem sessão ativa) ---
 
+// Mesma lógica de IP confiável usada no login (lib/login-throttle.ts): nunca confia
+// em headers como o cliente os enviou, só no que o proxy confiável gravou.
 async function getClientIdentifier() {
-  const headersList = await headers()
-  const forwardedFor = headersList.get('x-forwarded-for')?.split(',')[0]?.trim()
-  return forwardedFor || headersList.get('x-real-ip')?.trim() || 'unknown'
+  return (await getClientIpFromHeaders()) ?? 'unknown'
 }
 
 // Usa o mesmo mecanismo de bloqueio temporário do login, mas num "namespace" próprio,
