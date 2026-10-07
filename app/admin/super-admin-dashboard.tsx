@@ -550,11 +550,13 @@ function NovoSuperAdminDialog({
 }) {
   const router = useRouter()
   const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [nivelAcesso, setNivelAcesso] = useState<NivelAcesso>('completo')
   const [isPending, startTransition] = useTransition()
 
   function resetForm() {
     setUsername('')
+    setEmail('')
     setNivelAcesso('completo')
   }
 
@@ -562,7 +564,7 @@ function NovoSuperAdminDialog({
     event.preventDefault()
     startTransition(async () => {
       try {
-        const credential = await createSuperAdmin(username, nivelAcesso === 'completo')
+        const credential = await createSuperAdmin(username, email, nivelAcesso === 'completo')
         resetForm()
         onOpenChange(false)
         onCreated(credential)
@@ -592,6 +594,17 @@ function NovoSuperAdminDialog({
             <Input id="novo-supremo-nome" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Ex.: viceprefeita" required />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="novo-supremo-email">E-mail de acesso</Label>
+            <Input
+              id="novo-supremo-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Ex.: viceprefeita@saquarema.rj.gov.br"
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="novo-supremo-nivel">Nível de acesso</Label>
             <Select value={nivelAcesso} onValueChange={(value) => setNivelAcesso((value ?? 'completo') as NivelAcesso)}>
               <SelectTrigger id="novo-supremo-nivel" className="w-full">
@@ -608,7 +621,7 @@ function NovoSuperAdminDialog({
                 : 'Só acompanha os números de todas as secretarias. Não pode criar, editar ou excluir nada (ex.: perfil da prefeita).'}
             </p>
           </div>
-          <Button type="submit" disabled={isPending} className="mt-1">
+          <Button type="submit" disabled={isPending || !username.trim() || !email.trim()} className="mt-1">
             {isPending ? 'Criando...' : 'Criar usuário supremo'}
           </Button>
         </form>

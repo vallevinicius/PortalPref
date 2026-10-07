@@ -101,7 +101,12 @@ export async function reenviarCodigoVerificacao() {
     },
   })
 
-  await sendVerificationCodeEmail(usuario.email, code)
+  try {
+    await sendVerificationCodeEmail(usuario.email, code)
+  } catch (err) {
+    console.error('Falha ao reenviar e-mail de confirmação de senha:', err)
+    throw new Error('Não foi possível enviar o e-mail agora. Tente novamente em instantes ou contate um administrador.')
+  }
 
   return { ok: true }
 }

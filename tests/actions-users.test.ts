@@ -111,14 +111,16 @@ describe('ações de usuários e credenciais', () => {
   })
 
   it('cria super admin sem secretaria vinculada', async () => {
-    await expect(createSuperAdmin('  novo-root ')).resolves.toEqual({
+    await expect(createSuperAdmin('  novo-root ', 'novo-root@prefeitura.gov.br')).resolves.toEqual({
       username: 'novo-root',
-      password: 'SenhaGerada1',
+      password: 'mudar123',
     })
     expect(prismaMock.user.create).toHaveBeenCalledWith({
       data: {
         username: 'novo-root',
+        email: 'novo-root@prefeitura.gov.br',
         passwordHash: 'hash-gerado',
+        mustChangePassword: true,
         role: 'super_admin',
         secretariaId: null,
         canEdit: true,
@@ -127,14 +129,16 @@ describe('ações de usuários e credenciais', () => {
   })
 
   it('cria super admin apenas para visualização quando o nível de acesso é restrito', async () => {
-    await expect(createSuperAdmin('viceprefeita', false)).resolves.toEqual({
+    await expect(createSuperAdmin('viceprefeita', 'viceprefeita@prefeitura.gov.br', false)).resolves.toEqual({
       username: 'viceprefeita',
-      password: 'SenhaGerada1',
+      password: 'mudar123',
     })
     expect(prismaMock.user.create).toHaveBeenCalledWith({
       data: {
         username: 'viceprefeita',
+        email: 'viceprefeita@prefeitura.gov.br',
         passwordHash: 'hash-gerado',
+        mustChangePassword: true,
         role: 'super_admin',
         secretariaId: null,
         canEdit: false,
@@ -142,11 +146,19 @@ describe('ações de usuários e credenciais', () => {
     })
   })
 
-  it('rejeita super admin vazio e conflito de username', async () => {
-    await expect(createSuperAdmin(' ')).rejects.toThrow('Informe o usuário de acesso.')
+  it('rejeita super admin ou e-mail vazio e conflito de username/e-mail', async () => {
+    await expect(createSuperAdmin(' ', 'root@prefeitura.gov.br')).rejects.toThrow('Informe o usuário de acesso.')
+    await expect(createSuperAdmin('root-2', ' ')).rejects.toThrow('Informe o e-mail de acesso.')
 
-    prismaMock.user.create.mockRejectedValue({ code: 'P2002' })
-    await expect(createSuperAdmin('root-2')).rejects.toThrow('Já existe um usuário com esse nome de acesso.')
+    prismaMock.user.create.mockRejectedValue({ code: 'P2002', meta: { target: ['username'] } })
+    await expect(createSuperAdmin('root-2', 'root-2@prefeitura.gov.br')).rejects.toThrow(
+      'Já existe um usuário com esse nome de acesso.',
+    )
+
+    prismaMock.user.create.mockRejectedValue({ code: 'P2002', meta: { target: ['email'] } })
+    await expect(createSuperAdmin('root-2', 'root-2@prefeitura.gov.br')).rejects.toThrow(
+      'Já existe um usuário com esse e-mail.',
+    )
   })
 
   describe('usuário responsável de projeto (projeto_admin)', () => {

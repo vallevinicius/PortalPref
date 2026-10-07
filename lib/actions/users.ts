@@ -7,7 +7,7 @@ import { recordAuditLog } from '@/lib/audit-log'
 import { assertCanEdit, requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
 import { isBootstrapAdminUsername } from '@/lib/bootstrap-admin'
 import { sendVerificationCodeEmail } from '@/lib/mail'
-import { DEFAULT_PASSWORD, generateRandomPassword, generateVerificationCode, VERIFICATION_CODE_DURATION_MS } from '@/lib/password'
+import { DEFAULT_PASSWORD, generateVerificationCode, VERIFICATION_CODE_DURATION_MS } from '@/lib/password'
 import { prisma } from '@/lib/prisma'
 
 async function assertProjetoOwnership(projetoId: number, session: SessionPayload) {
@@ -86,7 +86,7 @@ export async function createSecretariaUser(username: string, email: string, secr
   return { username: trimmed, password }
 }
 
-export async function createSuperAdmin(username: string, canEdit: boolean = true) {
+export async function createSuperAdmin(username: string, email: string, canEdit: boolean = true) {
   const session = await requireSession('super_admin')
   assertCanEdit(session)
 
@@ -94,8 +94,12 @@ export async function createSuperAdmin(username: string, canEdit: boolean = true
   if (!trimmed) {
     throw new Error('Informe o usuário de acesso.')
   }
+  const trimmedEmail = email.trim()
+  if (!trimmedEmail) {
+    throw new Error('Informe o e-mail de acesso.')
+  }
 
-  const password = generateRandomPassword()
+  const password = DEFAULT_PASSWORD
   const passwordHash = await bcrypt.hash(password, 12)
 
   let createdUser: { id: number } | undefined
@@ -103,17 +107,16 @@ export async function createSuperAdmin(username: string, canEdit: boolean = true
     createdUser = await prisma.user.create({
       data: {
         username: trimmed,
+        email: trimmedEmail,
         passwordHash,
+        mustChangePassword: true,
         role: UserRole.super_admin,
         secretariaId: null,
         canEdit,
       },
     })
   } catch (err) {
-    if ((err as { code?: string }).code === 'P2002') {
-      throw new Error('Já existe um usuário com esse nome de acesso.')
-    }
-    throw err
+    throw duplicateFieldError(err) ?? err
   }
 
   await recordAuditLog({
