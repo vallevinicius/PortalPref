@@ -184,10 +184,22 @@ function shiftReferenceDate(hoje: Date, range: RangeKey, offset: number): Date {
   const data = new Date(hoje)
   if (offset === 0) return data
   if (range === 'dias') data.setDate(data.getDate() - offset * 7)
-  else if (range === 'mes') data.setDate(data.getDate() - offset * 30)
   else if (range === 'semanas') data.setDate(data.getDate() - offset * 56)
-  else if (range === '6meses') data.setMonth(data.getMonth() - offset * 6)
+  // Meses: sempre no dia 1 para evitar overflow (ex.: 31/out - 1 mês = 1/out em vez de 30/set).
+  else if (range === 'mes') return new Date(data.getFullYear(), data.getMonth() - offset, 1)
+  else if (range === '6meses') return new Date(data.getFullYear(), data.getMonth() - offset * 6, 1)
   return data
+}
+
+// Semanas começam no domingo.
+function inicioDaSemana(data: Date): Date {
+  const inicio = new Date(data)
+  inicio.setDate(inicio.getDate() - inicio.getDay())
+  return inicio
+}
+
+function isoDate(data: Date) {
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`
 }
 
 function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: number, offset: number): Bucket[] {
@@ -196,16 +208,19 @@ function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: 
   const hoje = shiftReferenceDate(hojeBase, range, offset)
 
   if (range === 'dias' || range === 'mes') {
-    const numDias = range === 'dias' ? 7 : 30
     const totalPorDia = new Map<string, number>()
     for (const ponto of pontos) {
       totalPorDia.set(ponto.data_referencia, (totalPorDia.get(ponto.data_referencia) ?? 0) + ponto.valor)
     }
 
+    // Dias: últimos 7 dias. Mês: mês-calendário completo (do dia 1 ao último dia).
+    const numDias = range === 'dias' ? 7 : new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
+    const primeiroDia = range === 'dias' ? null : new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+
     return Array.from({ length: numDias }, (_, indice) => {
-      const dia = new Date(hoje)
-      dia.setDate(dia.getDate() - (numDias - 1 - indice))
-      const iso = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')}`
+      const dia = primeiroDia ? new Date(primeiroDia) : new Date(hoje)
+      dia.setDate(primeiroDia ? dia.getDate() + indice : dia.getDate() - (numDias - 1 - indice))
+      const iso = isoDate(dia)
       const total = totalPorDia.get(iso)
       return {
         label: formatDiaMes(dia),
@@ -217,12 +232,13 @@ function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: 
 
   if (range === 'semanas') {
     const numSemanas = 8
+    const domingoAtual = inicioDaSemana(hoje)
     return Array.from({ length: numSemanas }, (_, indice) => {
       const deslocamento = numSemanas - 1 - indice
-      const inicio = new Date(hoje)
-      inicio.setDate(inicio.getDate() - deslocamento * 7 - 6)
-      const fim = new Date(hoje)
-      fim.setDate(fim.getDate() - deslocamento * 7)
+      const inicio = new Date(domingoAtual)
+      inicio.setDate(inicio.getDate() - deslocamento * 7)
+      const fim = new Date(inicio)
+      fim.setDate(fim.getDate() + 6)
       const pontosNaSemana = pontos.filter((ponto) => {
         const data = pontoDate(ponto)
         return data >= inicio && data <= fim
@@ -301,14 +317,14 @@ function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: 
 
 function RangeSwitcher({ range, onChange }: { range: RangeKey; onChange: (proximoRange: RangeKey) => void }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5">
+    <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted/60 p-0.5">
       {RANGE_PRESETS.map((preset) => (
         <button
           key={preset.key}
           type="button"
           onClick={() => onChange(preset.key)}
           className={cn(
-            'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+            'whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors',
             preset.key === range
               ? 'bg-card text-foreground shadow-sm ring-1 ring-foreground/10'
               : 'text-muted-foreground hover:text-foreground',
@@ -348,21 +364,32 @@ function formatPeriodoLabel(range: RangeKey, offset: number): string {
     return `${formatMesAno(anoInicio, mesInicio)} – ${formatMesAno(fim.getFullYear(), fim.getMonth())}`
   }
 
-  const inicio = new Date(fim)
-  if (range === 'dias') inicio.setDate(inicio.getDate() - 6)
-  else if (range === 'mes') inicio.setDate(inicio.getDate() - 29)
-  else if (range === 'semanas') inicio.setDate(inicio.getDate() - 55)
+  if (range === 'mes') {
+    const primeiro = new Date(fim.getFullYear(), fim.getMonth(), 1)
+    const ultimo = new Date(fim.getFullYear(), fim.getMonth() + 1, 0)
+    return `${formatDiaMes(primeiro)} – ${formatDiaMes(ultimo)}`
+  }
 
+  if (range === 'semanas') {
+    const inicio = inicioDaSemana(fim)
+    inicio.setDate(inicio.getDate() - 49)
+    const ultimo = inicioDaSemana(fim)
+    ultimo.setDate(ultimo.getDate() + 6)
+    return `${formatDiaMes(inicio)} – ${formatDiaMes(ultimo)}`
+  }
+
+  const inicio = new Date(fim)
+  inicio.setDate(inicio.getDate() - 6)
   return `${formatDiaMes(inicio)} – ${formatDiaMes(fim)}`
 }
 
 function PeriodSwitcher({ range, offset, onChange }: { range: RangeKey; offset: number; onChange: (proximoOffset: number) => void }) {
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex shrink-0 items-center gap-0.5">
       <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(offset + 1)} aria-label="Período anterior">
         <ChevronLeft className="size-4" />
       </Button>
-      <span className="min-w-26 text-center text-xs font-medium text-foreground">{formatPeriodoLabel(range, offset)}</span>
+      <span className="min-w-26 whitespace-nowrap text-center text-xs font-medium text-foreground">{formatPeriodoLabel(range, offset)}</span>
       <Button
         type="button"
         variant="ghost"
@@ -399,10 +426,14 @@ function IndicadorChart({
   const [ano, setAno] = useState(() => new Date().getFullYear())
   const [offset, setOffset] = useState(0)
   const dadosBucket = useMemo(() => buildBucketedData(pontos, range, ano, offset), [pontos, range, ano, offset])
-  const totalPeriodo = useMemo(
-    () => dadosBucket.reduce((soma, bucket) => soma + (bucket.valor ?? 0), 0),
-    [dadosBucket],
-  )
+  const [modoTotal, setModoTotal] = useState<'soma' | 'diferenca'>('soma')
+  const totalPeriodo = useMemo(() => {
+    if (modoTotal === 'soma') return dadosBucket.reduce((soma, bucket) => soma + (bucket.valor ?? 0), 0)
+    // Diferença: último valor do período menos o primeiro (ignora períodos sem lançamento).
+    const preenchidos = dadosBucket.filter((bucket) => bucket.valor !== null)
+    if (preenchidos.length < 2) return 0
+    return preenchidos[preenchidos.length - 1].valor! - preenchidos[0].valor!
+  }, [dadosBucket, modoTotal])
   const tickInterval = dadosBucket.length > 15 ? Math.ceil(dadosBucket.length / 10) - 1 : 0
 
   return (
@@ -418,9 +449,29 @@ function IndicadorChart({
       </div>
       <div className="mb-2 flex items-end justify-between gap-2">
         <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValor(totalPeriodo, unidade)}</p>
-        {escala && <EscalaBadge valor={totalPeriodo} escala={escala} />}
+        <div className="flex items-center gap-2">
+          {escala && modoTotal === 'soma' && <EscalaBadge valor={totalPeriodo} escala={escala} />}
+          <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5" role="group" aria-label="Tipo de total">
+            {(['soma', 'diferenca'] as const).map((modo) => (
+              <button
+                key={modo}
+                type="button"
+                onClick={() => setModoTotal(modo)}
+                aria-pressed={modoTotal === modo}
+                className={cn(
+                  'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                  modoTotal === modo
+                    ? 'bg-card text-foreground shadow-sm ring-1 ring-foreground/10'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {modo === 'soma' ? 'Soma' : 'Diferença'}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
         <RangeSwitcher
           range={range}
           onChange={(proximoRange) => {
