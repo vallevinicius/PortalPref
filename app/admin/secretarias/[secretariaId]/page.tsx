@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import { AdminHeader } from '@/app/admin/admin-header'
 import { NovoProjetoForm } from '@/app/admin/secretaria-admin-dashboard'
 import { ProjetoCardGrid } from '@/app/admin/projeto-card-grid'
+import { SecretariaActions } from './secretaria-actions'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSession } from '@/lib/auth'
 import { getProjetosComIndicadores, getSecretariaById } from '@/lib/data'
@@ -37,6 +38,7 @@ export default async function SecretariaDetailPage({ params }: { params: Promise
           </Link>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Icon className="size-6" />
@@ -47,6 +49,10 @@ export default async function SecretariaDetailPage({ params }: { params: Promise
               {secretaria.projetos_count} projeto{secretaria.projetos_count === 1 ? '' : 's'}
             </p>
           </div>
+        </div>
+        {session.canEdit !== false && (
+          <SecretariaActions secretariaId={secretaria.id} nome={secretaria.nome} projetosCount={secretaria.projetos_count} />
+        )}
         </div>
 
         {session.canEdit !== false && (
