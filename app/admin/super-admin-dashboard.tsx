@@ -80,7 +80,11 @@ function NovaSecretariaDialog({
     const nome = selecionado === OUTRA_OPCAO_VALOR ? nomePersonalizado : selecionado
     startTransition(async () => {
       try {
-        await createSecretaria(nome)
+        const resultado = await createSecretaria(nome)
+        if (resultado.error) {
+          toast.error(resultado.error)
+          return
+        }
         resetForm()
         onOpenChange(false)
         toast.success('Secretaria criada.')

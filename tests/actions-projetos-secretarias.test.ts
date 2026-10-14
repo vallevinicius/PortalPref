@@ -289,10 +289,10 @@ describe('ação de secretarias', () => {
   })
 
   it('rejeita nome vazio e converte conflito único em mensagem de domínio', async () => {
-    await expect(createSecretaria(' ')).rejects.toThrow('Informe o nome da secretaria.')
+    await expect(createSecretaria(' ')).resolves.toEqual({ error: 'Informe o nome da secretaria.' })
 
     prismaMock.secretaria.create.mockRejectedValue({ code: 'P2002' })
-    await expect(createSecretaria('Saúde')).rejects.toThrow('Já existe uma secretaria com esse nome.')
+    await expect(createSecretaria('Saúde')).resolves.toEqual({ error: 'Já existe uma secretaria com esse nome.' })
   })
 })
 
