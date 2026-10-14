@@ -17,6 +17,7 @@ model Secretaria {
   id        Int       @id @default(autoincrement())
   nome      String    @unique @db.VarChar(255)
   slug      String    @unique @db.VarChar(255)
+  secretarioNome String? @map("secretario_nome") @db.VarChar(255)
   createdAt DateTime  @default(now()) @map("created_at")
   users     User[]
   projetos  Projeto[]

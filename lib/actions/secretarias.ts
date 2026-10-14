@@ -9,7 +9,7 @@ import { slugify } from '@/lib/slug'
 
 // Em produção o Next mascara a mensagem de erros lançados por server actions
 // (o cliente só vê "Minified React error #441"), então falhas esperadas voltam como dado.
-export async function createSecretaria(nome: string): Promise<{ error?: string }> {
+export async function createSecretaria(nome: string, secretarioNome: string): Promise<{ error?: string }> {
   const session = await requireSession('super_admin')
   if (session.canEdit === false) {
     return { error: 'Sua conta tem acesso apenas de visualização.' }
@@ -24,12 +24,17 @@ export async function createSecretaria(nome: string): Promise<{ error?: string }
   if (!slug) {
     return { error: 'O nome da secretaria deve conter letras ou números.' }
   }
+  const secretario = secretarioNome.trim()
+  if (!secretario) {
+    return { error: 'Informe o nome do secretário.' }
+  }
 
   try {
     const secretaria = await prisma.secretaria.create({
       data: {
         nome: trimmed,
         slug,
+        secretarioNome: secretario,
       },
     })
 
@@ -38,7 +43,7 @@ export async function createSecretaria(nome: string): Promise<{ error?: string }
       action: 'secretaria.create',
       entityType: 'secretaria',
       entityId: secretaria.id,
-      details: { nome: secretaria.nome },
+      details: { nome: secretaria.nome, secretarioNome: secretario },
     })
   } catch (err) {
     if ((err as { code?: string }).code === 'P2002') {
@@ -51,7 +56,7 @@ export async function createSecretaria(nome: string): Promise<{ error?: string }
   return {}
 }
 
-export async function updateSecretaria(secretariaId: number, nome: string): Promise<{ error?: string }> {
+export async function updateSecretaria(secretariaId: number, nome: string, secretarioNome: string): Promise<{ error?: string }> {
   const session = await requireSession('super_admin')
   if (session.canEdit === false) {
     return { error: 'Sua conta tem acesso apenas de visualização.' }
@@ -67,13 +72,18 @@ export async function updateSecretaria(secretariaId: number, nome: string): Prom
     return { error: 'O nome da secretaria deve conter letras ou números.' }
   }
 
+  const secretario = secretarioNome.trim()
+  if (!secretario) {
+    return { error: 'Informe o nome do secretário.' }
+  }
+
   const atual = await prisma.secretaria.findUnique({ where: { id: secretariaId }, select: { nome: true } })
   if (!atual) {
     return { error: 'Secretaria não encontrada.' }
   }
 
   try {
-    await prisma.secretaria.update({ where: { id: secretariaId }, data: { nome: trimmed, slug } })
+    await prisma.secretaria.update({ where: { id: secretariaId }, data: { nome: trimmed, slug, secretarioNome: secretario } })
   } catch (err) {
     if ((err as { code?: string }).code === 'P2002') {
       return { error: 'Já existe uma secretaria com esse nome.' }
@@ -86,7 +96,7 @@ export async function updateSecretaria(secretariaId: number, nome: string): Prom
     action: 'secretaria.update',
     entityType: 'secretaria',
     entityId: secretariaId,
-    details: { nome: trimmed, nomeAnterior: atual.nome },
+    details: { nome: trimmed, nomeAnterior: atual.nome, secretarioNome: secretario },
   })
 
   revalidatePath('/admin')

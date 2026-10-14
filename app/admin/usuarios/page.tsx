@@ -12,6 +12,9 @@ export default async function UsuariosPage() {
   if (session.role === 'projeto_admin') redirect('/admin')
   if (session.role === 'secretaria_admin' && !session.secretariaId) redirect('/admin')
 
+  // Perfil só de visualização acompanha apenas os gráficos: não vê a lista de usuários.
+  if (session.role === 'super_admin' && session.canEdit === false) redirect('/admin')
+
   const isSuperAdmin = session.role === 'super_admin'
 
   const [usuarios, projetosResumo] = await Promise.all([
@@ -44,7 +47,12 @@ export default async function UsuariosPage() {
         </Link>
       </div>
 
-      <UsuariosTable usuarios={usuarios} projetos={projetosGerenciaveis} canEdit={session.canEdit !== false} />
+      <UsuariosTable
+        usuarios={usuarios}
+        projetos={projetosGerenciaveis}
+        canEdit={session.canEdit !== false}
+        podeAlterarCargo={isSuperAdmin}
+      />
     </main>
   )
 }

@@ -5,6 +5,7 @@ export interface Secretaria {
   id: number
   nome: string
   slug: string
+  secretario_nome: string | null
   projetos_count: number
 }
 
@@ -174,6 +175,7 @@ export async function getSecretariaById(id: number): Promise<Secretaria | null> 
       id: true,
       nome: true,
       slug: true,
+      secretarioNome: true,
       _count: { select: { projetos: true } },
     },
   })
@@ -184,6 +186,7 @@ export async function getSecretariaById(id: number): Promise<Secretaria | null> 
     id: secretaria.id,
     nome: secretaria.nome,
     slug: secretaria.slug,
+    secretario_nome: secretaria.secretarioNome,
     projetos_count: secretaria._count.projetos,
   }
 }
@@ -247,6 +250,7 @@ export async function getSecretarias(): Promise<Secretaria[]> {
       id: true,
       nome: true,
       slug: true,
+      secretarioNome: true,
       _count: { select: { projetos: true } },
     },
   })
@@ -255,6 +259,7 @@ export async function getSecretarias(): Promise<Secretaria[]> {
     id: secretaria.id,
     nome: secretaria.nome,
     slug: secretaria.slug,
+    secretario_nome: secretaria.secretarioNome,
     projetos_count: secretaria._count.projetos,
   }))
 }

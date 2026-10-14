@@ -51,7 +51,7 @@ export default async function SecretariaDetailPage({ params }: { params: Promise
           </div>
         </div>
         {session.canEdit !== false && (
-          <SecretariaActions secretariaId={secretaria.id} nome={secretaria.nome} projetosCount={secretaria.projetos_count} />
+          <SecretariaActions secretariaId={secretaria.id} nome={secretaria.nome} secretarioNome={secretaria.secretario_nome} projetosCount={secretaria.projetos_count} />
         )}
         </div>
 

@@ -21,6 +21,7 @@ const { getSessionMock, redirectMock, notFoundMock, dataMock } = vi.hoisted(() =
     }),
     dataMock: {
       getProjetoComIndicadores: vi.fn(),
+      getSecretarias: vi.fn(),
     },
   }
 })
@@ -83,6 +84,7 @@ describe('app/admin/projetos/[projetoId]/page (autorização por dono do recurso
   it('permite super_admin ver qualquer projeto', async () => {
     getSessionMock.mockResolvedValue({ userId: 1, username: 'root', role: 'super_admin', secretariaId: null, projetoIds: [] })
     dataMock.getProjetoComIndicadores.mockResolvedValue(PROJETO)
+    dataMock.getSecretarias.mockResolvedValue([])
 
     await expect(ProjetoDetailPage({ params: makeParams('20') })).resolves.toBeTruthy()
     expect(redirectMock).not.toHaveBeenCalled()

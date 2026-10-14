@@ -140,3 +140,213 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Relatório impresso do projeto (ver relatorio-button.tsx) */
+#relatorio-impressao {
+  display: none;
+}
+
+@page {
+  size: A4;
+  /* Margem zero remove o cabeçalho/rodapé do navegador (data, título, URL). As margens
+     reais vêm do thead/tfoot repetido em cada página (.rel-margem). */
+  margin: 0;
+}
+
+@media print {
+  body > *:not(#relatorio-impressao) {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  #relatorio-impressao {
+    display: block;
+    color: #1a1a18;
+    background: #fff;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-size: 11.5px;
+    line-height: 1.45;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #relatorio-impressao .rel-pagina {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #relatorio-impressao .rel-pagina > thead > tr > td,
+  #relatorio-impressao .rel-pagina > tfoot > tr > td,
+  #relatorio-impressao .rel-conteudo {
+    padding: 0;
+  }
+
+  #relatorio-impressao .rel-margem {
+    height: 14mm;
+  }
+
+  #relatorio-impressao .rel-conteudo {
+    padding: 0 16mm;
+  }
+
+  #relatorio-impressao .rel-topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #006e6d;
+  }
+
+  #relatorio-impressao .rel-logo {
+    height: 44px;
+    width: auto;
+  }
+
+  #relatorio-impressao .rel-topo-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 11px;
+    color: #6b6a64;
+  }
+
+  #relatorio-impressao .rel-topo-info strong {
+    font-size: 13px;
+    color: #006e6d;
+  }
+
+  #relatorio-impressao .rel-projeto {
+    margin: 18px 0 20px;
+  }
+
+  #relatorio-impressao .rel-secretaria {
+    margin: 0;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #006e6d;
+  }
+
+  #relatorio-impressao h1 {
+    margin: 2px 0 4px;
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+
+  #relatorio-impressao .rel-descricao {
+    margin: 0 0 10px;
+    color: #4a4943;
+  }
+
+  #relatorio-impressao .rel-fatos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    margin: 10px 0 0;
+    padding: 10px 14px;
+    background: #f3f2ee;
+    border-radius: 6px;
+  }
+
+  #relatorio-impressao .rel-fatos dt {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b6a64;
+  }
+
+  #relatorio-impressao .rel-fatos dd {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  #relatorio-impressao .rel-vazio {
+    padding: 20px;
+    text-align: center;
+    color: #6b6a64;
+  }
+
+  #relatorio-impressao .rel-grafico {
+    margin-bottom: 22px;
+    padding: 14px 16px;
+    border: 1px solid #dcdad2;
+    border-radius: 8px;
+    break-inside: avoid-page;
+  }
+
+  #relatorio-impressao h2 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  #relatorio-impressao .rel-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  #relatorio-impressao .rel-kpis > div {
+    padding: 6px 10px;
+    background: #f3f2ee;
+    border-radius: 6px;
+  }
+
+  #relatorio-impressao .rel-kpis span {
+    display: block;
+    font-size: 9px;
+    color: #6b6a64;
+  }
+
+  #relatorio-impressao .rel-kpis strong {
+    font-size: 14px;
+  }
+
+  #relatorio-impressao .rel-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-bottom: 8px;
+  }
+
+  #relatorio-impressao .rel-dados {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #relatorio-impressao .rel-dados th {
+    text-align: left;
+    padding: 4px 8px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b6a64;
+    border-bottom: 1.5px solid #006e6d;
+  }
+
+  #relatorio-impressao .rel-dados td {
+    padding: 3px 8px;
+    border-bottom: 1px solid #ebeae4;
+  }
+
+  #relatorio-impressao .rel-dados tbody tr:nth-child(even) td {
+    background: #faf9f6;
+  }
+
+  #relatorio-impressao .rel-rodape {
+    position: fixed;
+    bottom: 6mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9.5px;
+    color: #8a8982;
+  }
+}

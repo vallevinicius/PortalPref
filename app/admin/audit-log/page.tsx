@@ -123,7 +123,7 @@ function Pagination({ page, totalPages, action, entityType, actor }: { page: num
 export default async function AuditLogPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const session = await getSession()
   if (!session) redirect('/')
-  if (session.role !== 'super_admin') redirect('/admin')
+  if (session.role !== 'super_admin' || session.canEdit === false) redirect('/admin')
 
   const params = await searchParams
   const action = getSingleValue(params.action)

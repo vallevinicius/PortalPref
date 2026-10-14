@@ -4,9 +4,10 @@ import { notFound, redirect } from 'next/navigation'
 import { AdminHeader } from '@/app/admin/admin-header'
 import { NovoProjetoDialogButton } from '@/app/admin/secretaria-admin-dashboard'
 import { getSession } from '@/lib/auth'
-import { getProjetoComIndicadores } from '@/lib/data'
+import { getProjetoComIndicadores, getSecretarias } from '@/lib/data'
 import { calcularStatusAtualizacao } from '@/lib/prazo-atualizacao'
 import { EditarProjetoButton, PrazoAtualizacaoButton, ProjetoDashboard } from './projeto-dashboard'
+import { RelatorioButton } from './relatorio-button'
 
 export default async function ProjetoDetailPage({ params }: { params: Promise<{ projetoId: string }> }) {
   const session = await getSession()
@@ -24,6 +25,11 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
   const isProjectResponsible = session.role === 'projeto_admin' && session.projetoIds.includes(projeto.id)
   if (session.role === 'secretaria_admin' && !isOwner) redirect('/admin')
   if (session.role === 'projeto_admin' && !isProjectResponsible) redirect('/admin')
+
+  const secretariasDisponiveis =
+    isSuperAdmin && session.canEdit !== false
+      ? (await getSecretarias()).map((s) => ({ id: s.id, nome: s.nome }))
+      : undefined
 
   const canManageUsers = (isSuperAdmin && session.canEdit !== false) || isOwner
   const editable = canManageUsers || isProjectResponsible
@@ -53,7 +59,8 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">{projeto.secretaria_nome}</p>
           <div className="flex items-center gap-1">
             <h2 className="text-xl font-semibold text-foreground">{projeto.nome}</h2>
-            {editable && <EditarProjetoButton projeto={projeto} />}
+            <RelatorioButton projeto={projeto} />
+            {editable && <EditarProjetoButton projeto={projeto} secretarias={secretariasDisponiveis} />}
             {canManageUsers && <PrazoAtualizacaoButton projetoId={projeto.id} prazoAtual={projeto.prazo_atualizacao_dias} />}
           </div>
           {projeto.descricao && <p className="mt-1 text-sm text-muted-foreground">{projeto.descricao}</p>}
@@ -95,7 +102,12 @@ export default async function ProjetoDetailPage({ params }: { params: Promise<{ 
           </div>
         )}
 
-        <ProjetoDashboard projeto={projeto} editable={editable} canDeleteProject={isSuperAdmin && session.canEdit !== false} />
+        <ProjetoDashboard
+          projeto={projeto}
+          editable={editable}
+          canDeleteProject={isSuperAdmin && session.canEdit !== false}
+          somenteGraficos={isSuperAdmin && session.canEdit === false}
+        />
       </div>
     </main>
   )

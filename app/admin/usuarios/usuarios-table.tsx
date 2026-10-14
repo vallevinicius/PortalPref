@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { assignProjetoUser, deleteUser, enviarRedefinicaoSenha, unassignProjetoUser, updateUserProfile } from '@/lib/actions/users'
+import { assignProjetoUser, deleteUser, enviarRedefinicaoSenha, unassignProjetoUser, updateUserProfile, updateUserRole } from '@/lib/actions/users'
 import type { ProjetoResumo, UsuarioResumo } from '@/lib/data'
 import { getSecretariaIcon } from '@/lib/secretaria-icon'
 
@@ -156,14 +156,87 @@ function ProjetosDoUsuario({ usuario, projetosDaSecretaria }: { usuario: Usuario
   )
 }
 
+function AlterarCargo({ usuario, projetos, onChanged }: { usuario: UsuarioResumo; projetos: ProjetoResumo[]; onChanged: () => void }) {
+  const router = useRouter()
+  const [destinoId, setDestinoId] = useState('')
+  const [isPending, startTransition] = useTransition()
+
+  const virarSecretario = usuario.role === 'projeto_admin'
+  const novoCargo = virarSecretario ? 'secretaria_admin' : 'projeto_admin'
+
+  // Para virar secretário: secretarias conhecidas pelos projetos. Para virar responsável: projetos da secretaria dele.
+  const opcoes = useMemo(() => {
+    if (virarSecretario) {
+      const mapa = new Map<number, string>()
+      for (const p of projetos) mapa.set(p.secretaria_id, p.secretaria_nome)
+      return Array.from(mapa, ([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome))
+    }
+    return projetos
+      .filter((p) => p.secretaria_id === usuario.secretaria_id)
+      .map((p) => ({ id: p.id, nome: p.nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+  }, [virarSecretario, projetos, usuario.secretaria_id])
+
+  function handleSubmit() {
+    startTransition(async () => {
+      const resultado = await updateUserRole(usuario.id, novoCargo, Number(destinoId))
+      if (resultado.error) {
+        toast.error(resultado.error)
+        return
+      }
+      toast.success('Cargo atualizado.')
+      setDestinoId('')
+      onChanged()
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Cargo atual: {cargoLabel(usuario.role)}</Label>
+      <div className="flex items-end gap-2">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Select value={destinoId} onValueChange={(value) => setDestinoId(value ?? '')}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={virarSecretario ? 'Secretaria do secretário...' : 'Projeto sob responsabilidade...'}>
+                {(value: string | null) => (value ? opcoes.find((o) => String(o.id) === value)?.nome : null)}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {opcoes.map((o) => (
+                <SelectItem key={o.id} value={String(o.id)}>
+                  {o.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={handleSubmit} disabled={!destinoId || isPending}>
+          {isPending ? 'Alterando...' : virarSecretario ? 'Tornar secretário' : 'Tornar responsável'}
+        </Button>
+      </div>
+      {!virarSecretario && (
+        <p className="text-xs text-muted-foreground">Ao virar responsável de projeto, o usuário perde o acesso de secretário da secretaria.</p>
+      )}
+      {virarSecretario && (
+        <p className="text-xs text-muted-foreground">Ao virar secretário, os vínculos com projetos individuais são removidos.</p>
+      )}
+    </div>
+  )
+}
+
 function EditarUsuarioDialog({
   usuario,
   projetosDaSecretaria,
+  todosProjetos,
+  podeAlterarCargo,
   open,
   onOpenChange,
 }: {
   usuario: UsuarioResumo
   projetosDaSecretaria: ProjetoResumo[]
+  todosProjetos: ProjetoResumo[]
+  podeAlterarCargo: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -215,6 +288,13 @@ function EditarUsuarioDialog({
             </Button>
           </DialogFooter>
         </form>
+
+        {podeAlterarCargo && (
+          <>
+            <div className="h-px bg-border" />
+            <AlterarCargo usuario={usuario} projetos={todosProjetos} onChanged={() => onOpenChange(false)} />
+          </>
+        )}
 
         {usuario.role === 'projeto_admin' && (
           <>
@@ -318,7 +398,17 @@ function RedefinirSenhaDialog({
   )
 }
 
-function UsuarioRow({ usuario, projetos, canEdit }: { usuario: UsuarioResumo; projetos: ProjetoResumo[]; canEdit: boolean }) {
+function UsuarioRow({
+  usuario,
+  projetos,
+  canEdit,
+  podeAlterarCargo,
+}: {
+  usuario: UsuarioResumo
+  projetos: ProjetoResumo[]
+  canEdit: boolean
+  podeAlterarCargo: boolean
+}) {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -351,7 +441,14 @@ function UsuarioRow({ usuario, projetos, canEdit }: { usuario: UsuarioResumo; pr
               <Trash2 className="size-3.5" />
             </Button>
             <RedefinirSenhaDialog usuario={usuario} open={resetOpen} onOpenChange={setResetOpen} />
-            <EditarUsuarioDialog usuario={usuario} projetosDaSecretaria={projetosDaSecretaria} open={editOpen} onOpenChange={setEditOpen} />
+            <EditarUsuarioDialog
+              usuario={usuario}
+              projetosDaSecretaria={projetosDaSecretaria}
+              todosProjetos={projetos}
+              podeAlterarCargo={podeAlterarCargo}
+              open={editOpen}
+              onOpenChange={setEditOpen}
+            />
             <ExcluirUsuarioDialog usuario={usuario} open={deleteOpen} onOpenChange={setDeleteOpen} />
           </>
         ) : (
@@ -362,7 +459,17 @@ function UsuarioRow({ usuario, projetos, canEdit }: { usuario: UsuarioResumo; pr
   )
 }
 
-function UsuariosTabela({ usuarios, projetos, canEdit }: { usuarios: UsuarioResumo[]; projetos: ProjetoResumo[]; canEdit: boolean }) {
+function UsuariosTabela({
+  usuarios,
+  projetos,
+  canEdit,
+  podeAlterarCargo,
+}: {
+  usuarios: UsuarioResumo[]
+  projetos: ProjetoResumo[]
+  canEdit: boolean
+  podeAlterarCargo: boolean
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -377,7 +484,7 @@ function UsuariosTabela({ usuarios, projetos, canEdit }: { usuarios: UsuarioResu
         </thead>
         <tbody>
           {usuarios.map((usuario) => (
-            <UsuarioRow key={usuario.id} usuario={usuario} projetos={projetos} canEdit={canEdit} />
+            <UsuarioRow key={usuario.id} usuario={usuario} projetos={projetos} canEdit={canEdit} podeAlterarCargo={podeAlterarCargo} />
           ))}
         </tbody>
       </table>
@@ -416,7 +523,17 @@ function agruparPorSecretaria(usuarios: UsuarioResumo[]): GrupoSecretaria[] {
   })
 }
 
-function GrupoSecretariaCard({ grupo, projetos, canEdit }: { grupo: GrupoSecretaria; projetos: ProjetoResumo[]; canEdit: boolean }) {
+function GrupoSecretariaCard({
+  grupo,
+  projetos,
+  canEdit,
+  podeAlterarCargo,
+}: {
+  grupo: GrupoSecretaria
+  projetos: ProjetoResumo[]
+  canEdit: boolean
+  podeAlterarCargo: boolean
+}) {
   const [open, setOpen] = useState(true)
   const Icon = grupo.secretariaNome ? getSecretariaIcon(grupo.secretariaNome) : UserX
 
@@ -441,7 +558,7 @@ function GrupoSecretariaCard({ grupo, projetos, canEdit }: { grupo: GrupoSecreta
       </button>
       {open && (
         <CardContent className="p-0">
-          <UsuariosTabela usuarios={grupo.usuarios} projetos={projetos} canEdit={canEdit} />
+          <UsuariosTabela usuarios={grupo.usuarios} projetos={projetos} canEdit={canEdit} podeAlterarCargo={podeAlterarCargo} />
         </CardContent>
       )}
     </Card>
@@ -452,10 +569,12 @@ export function UsuariosTable({
   usuarios,
   projetos,
   canEdit,
+  podeAlterarCargo = false,
 }: {
   usuarios: UsuarioResumo[]
   projetos: ProjetoResumo[]
   canEdit: boolean
+  podeAlterarCargo?: boolean
 }) {
   const [busca, setBusca] = useState('')
 
@@ -496,7 +615,13 @@ export function UsuariosTable({
       ) : (
         <div className="flex flex-col gap-4">
           {grupos.map((grupo) => (
-            <GrupoSecretariaCard key={grupo.secretariaId ?? 'sem-secretaria'} grupo={grupo} projetos={projetos} canEdit={canEdit} />
+            <GrupoSecretariaCard
+              key={grupo.secretariaId ?? 'sem-secretaria'}
+              grupo={grupo}
+              projetos={projetos}
+              canEdit={canEdit}
+              podeAlterarCargo={podeAlterarCargo}
+            />
           ))}
         </div>
       )}

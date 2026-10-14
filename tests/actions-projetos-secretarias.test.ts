@@ -277,22 +277,23 @@ describe('ação de secretarias', () => {
   })
 
   it('cria secretaria com slug normalizado', async () => {
-    await createSecretaria('  Secretaria de Saúde  ')
+    await createSecretaria('  Secretaria de Saúde  ', '  Maria  ')
 
     expect(prismaMock.secretaria.create).toHaveBeenCalledWith({
       data: {
         nome: 'Secretaria de Saúde',
         slug: 'secretaria-de-saude',
+        secretarioNome: 'Maria',
       },
     })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin')
   })
 
   it('rejeita nome vazio e converte conflito único em mensagem de domínio', async () => {
-    await expect(createSecretaria(' ')).resolves.toEqual({ error: 'Informe o nome da secretaria.' })
+    await expect(createSecretaria(' ', 'Maria')).resolves.toEqual({ error: 'Informe o nome da secretaria.' })
 
     prismaMock.secretaria.create.mockRejectedValue({ code: 'P2002' })
-    await expect(createSecretaria('Saúde')).resolves.toEqual({ error: 'Já existe uma secretaria com esse nome.' })
+    await expect(createSecretaria('Saúde', 'Maria')).resolves.toEqual({ error: 'Já existe uma secretaria com esse nome.' })
   })
 })
 

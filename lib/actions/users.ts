@@ -405,3 +405,93 @@ export async function enviarRedefinicaoSenha(userId: number) {
 
   return { ok: true }
 }
+
+// Troca o cargo de um secretário <-> responsável de projeto. Só o admin supremo faz isso.
+// Para virar secretário é preciso informar a secretaria; para virar responsável de projeto,
+// o projeto. Os vínculos antigos (projetos) são removidos ao virar secretário.
+export async function updateUserRole(
+  userId: number,
+  novoCargo: 'secretaria_admin' | 'projeto_admin',
+  destinoId: number,
+): Promise<{ error?: string }> {
+  const session = await requireSession('super_admin')
+  if (session.canEdit === false) {
+    return { error: 'Sua conta tem acesso apenas de visualização.' }
+  }
+
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, role: true } })
+  if (!target || (target.role !== UserRole.secretaria_admin && target.role !== UserRole.projeto_admin)) {
+    return { error: 'Usuário não encontrado.' }
+  }
+  if (isBootstrapAdminUsername(target.username)) {
+    return { error: 'Este usuário é definido pelo .env do servidor e não pode ser editado por aqui.' }
+  }
+  if (target.id === session.userId) {
+    return { error: 'Você não pode alterar o cargo da sua própria conta.' }
+  }
+  if (target.role === novoCargo) {
+    return { error: 'O usuário já tem esse cargo.' }
+  }
+
+  if (novoCargo === 'secretaria_admin') {
+    const secretaria = await prisma.secretaria.findUnique({ where: { id: destinoId }, select: { id: true } })
+    if (!secretaria) return { error: 'Selecione a secretaria do secretário.' }
+    await prisma.$transaction([
+      prisma.projetoResponsavel.deleteMany({ where: { userId } }),
+      prisma.user.update({ where: { id: userId }, data: { role: UserRole.secretaria_admin, secretariaId: destinoId } }),
+    ])
+  } else {
+    const projeto = await prisma.projeto.findUnique({ where: { id: destinoId }, select: { id: true } })
+    if (!projeto) return { error: 'Selecione o projeto sob responsabilidade do usuário.' }
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: userId }, data: { role: UserRole.projeto_admin, secretariaId: null } }),
+      prisma.projetoResponsavel.create({ data: { userId, projetoId: destinoId } }),
+    ])
+  }
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'user.update_role',
+    entityType: 'user',
+    entityId: userId,
+    targetUserId: userId,
+    details: { roleAnterior: target.role, role: novoCargo },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/usuarios')
+  return {}
+}
+
+// Define se um administrador supremo tem acesso completo ou apenas de visualização.
+export async function setSuperAdminAccess(userId: number, canEdit: boolean): Promise<{ error?: string }> {
+  const session = await requireSession('super_admin')
+  if (session.canEdit === false) {
+    return { error: 'Sua conta tem acesso apenas de visualização.' }
+  }
+
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, role: true } })
+  if (!target || target.role !== UserRole.super_admin) {
+    return { error: 'Usuário não encontrado.' }
+  }
+  if (isBootstrapAdminUsername(target.username)) {
+    return { error: 'Este usuário é definido pelo .env do servidor e não pode ser editado por aqui.' }
+  }
+  if (target.id === session.userId) {
+    return { error: 'Você não pode alterar o nível de acesso da sua própria conta.' }
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { canEdit } })
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'user.update_access',
+    entityType: 'user',
+    entityId: userId,
+    targetUserId: userId,
+    details: { role: UserRole.super_admin, canEdit },
+  })
+
+  revalidatePath('/admin')
+  return {}
+}

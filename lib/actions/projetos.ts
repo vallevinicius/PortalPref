@@ -216,3 +216,45 @@ export async function deleteProjeto(projetoId: number) {
   revalidatePath('/admin')
   revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
 }
+
+// Troca a secretaria responsável pelo projeto. Só o admin supremo faz isso. Devolve o erro
+// como dado porque, em produção, o Next esconde a mensagem de erros lançados por server actions.
+export async function moverProjetoDeSecretaria(projetoId: number, secretariaId: number): Promise<{ error?: string }> {
+  const session = await requireSession('super_admin')
+  if (session.canEdit === false) {
+    return { error: 'Sua conta tem acesso apenas de visualização.' }
+  }
+
+  const projeto = await prisma.projeto.findUnique({
+    where: { id: projetoId },
+    select: { id: true, nome: true, secretariaId: true },
+  })
+  if (!projeto) return { error: 'Projeto não encontrado.' }
+  if (projeto.secretariaId === secretariaId) return {}
+
+  const destino = await prisma.secretaria.findUnique({ where: { id: secretariaId }, select: { id: true, nome: true } })
+  if (!destino) return { error: 'Secretaria de destino não encontrada.' }
+
+  try {
+    await prisma.projeto.update({ where: { id: projetoId }, data: { secretariaId } })
+  } catch (err) {
+    if ((err as { code?: string }).code === 'P2002') {
+      return { error: 'Já existe um projeto com esse nome na secretaria de destino.' }
+    }
+    throw err
+  }
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'project.move',
+    entityType: 'project',
+    entityId: projetoId,
+    details: { nome: projeto.nome, secretariaId, secretariaIdAnterior: projeto.secretariaId },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
+  revalidatePath(`/admin/secretarias/${secretariaId}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
+  return {}
+}

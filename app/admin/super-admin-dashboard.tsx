@@ -42,7 +42,7 @@ import {
 import { GeneratedPasswordBanner, type Credential } from './credential-components'
 import { createSecretaria } from '@/lib/actions/secretarias'
 import { cn } from '@/lib/utils'
-import { createProjetoUser, createSecretariaUser, createSuperAdmin, deleteUser, enviarRedefinicaoSenha } from '@/lib/actions/users'
+import { createProjetoUser, createSecretariaUser, createSuperAdmin, deleteUser, enviarRedefinicaoSenha, setSuperAdminAccess } from '@/lib/actions/users'
 import type { ProjetoResumo, Secretaria, SecretariaAdmin, SuperAdmin } from '@/lib/data'
 import { calcularStatusAtualizacao } from '@/lib/prazo-atualizacao'
 import { getSecretariaIcon } from '@/lib/secretaria-icon'
@@ -62,6 +62,7 @@ function NovaSecretariaDialog({
   const router = useRouter()
   const [selecionado, setSelecionado] = useState('')
   const [nomePersonalizado, setNomePersonalizado] = useState('')
+  const [secretarioNome, setSecretarioNome] = useState('')
   const [isPending, startTransition] = useTransition()
 
   const nomesExistentes = useMemo(() => new Set(secretarias.map((s) => s.nome)), [secretarias])
@@ -73,6 +74,7 @@ function NovaSecretariaDialog({
   function resetForm() {
     setSelecionado('')
     setNomePersonalizado('')
+    setSecretarioNome('')
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -80,7 +82,7 @@ function NovaSecretariaDialog({
     const nome = selecionado === OUTRA_OPCAO_VALOR ? nomePersonalizado : selecionado
     startTransition(async () => {
       try {
-        const resultado = await createSecretaria(nome)
+        const resultado = await createSecretaria(nome, secretarioNome)
         if (resultado.error) {
           toast.error(resultado.error)
           return
@@ -142,9 +144,24 @@ function NovaSecretariaDialog({
               />
             </div>
           )}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="nova-secretaria-secretario">Nome do secretário</Label>
+            <Input
+              id="nova-secretaria-secretario"
+              value={secretarioNome}
+              onChange={(e) => setSecretarioNome(e.target.value)}
+              placeholder="Ex.: Maria da Silva"
+              required
+            />
+          </div>
           <Button
             type="submit"
-            disabled={isPending || !selecionado || (selecionado === OUTRA_OPCAO_VALOR && !nomePersonalizado.trim())}
+            disabled={
+              isPending ||
+              !selecionado ||
+              !secretarioNome.trim() ||
+              (selecionado === OUTRA_OPCAO_VALOR && !nomePersonalizado.trim())
+            }
             className="mt-1"
           >
             {isPending ? 'Criando...' : 'Criar secretaria'}
@@ -499,7 +516,7 @@ function ProjetosPorSecretariaButton({ secretarias }: { secretarias: Secretaria[
   )
 }
 
-function SecretariaCard({ secretaria, admin }: { secretaria: Secretaria; admin: SecretariaAdmin | null }) {
+function SecretariaCard({ secretaria }: { secretaria: Secretaria }) {
   const Icon = getSecretariaIcon(secretaria.nome)
 
   return (
@@ -513,7 +530,7 @@ function SecretariaCard({ secretaria, admin }: { secretaria: Secretaria; admin: 
         className="pointer-events-none absolute -right-4 -top-4 size-28 text-white/10 transition-transform duration-150 group-hover:scale-110"
       />
       <Badge className="relative mb-2 w-fit border-white/25 bg-white/15 text-white">
-        {admin ? admin.username : 'Sem usuário'}
+        {secretaria.secretario_nome ?? 'Secretário não informado'}
       </Badge>
       <span className="relative text-base font-semibold leading-snug text-white">{secretaria.nome}</span>
       <span className="relative mt-1 text-xs text-white/75">
@@ -523,7 +540,7 @@ function SecretariaCard({ secretaria, admin }: { secretaria: Secretaria; admin: 
   )
 }
 
-function SecretariaGrid({ secretarias, admins }: { secretarias: Secretaria[]; admins: SecretariaAdmin[] }) {
+function SecretariaGrid({ secretarias }: { secretarias: Secretaria[] }) {
   if (secretarias.length === 0) {
     return <p className="text-sm text-muted-foreground">Nenhuma secretaria cadastrada ainda.</p>
   }
@@ -531,11 +548,7 @@ function SecretariaGrid({ secretarias, admins }: { secretarias: Secretaria[]; ad
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {secretarias.map((secretaria) => (
-        <SecretariaCard
-          key={secretaria.id}
-          secretaria={secretaria}
-          admin={admins.find((admin) => admin.secretaria_id === secretaria.id) ?? null}
-        />
+        <SecretariaCard key={secretaria.id} secretaria={secretaria} />
       ))}
     </div>
   )
@@ -650,6 +663,7 @@ function SuperAdminRow({
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [changingAccess, setChangingAccess] = useState(false)
 
   if (isBootstrapAdmin) {
     return (
@@ -676,6 +690,24 @@ function SuperAdminRow({
       .finally(() => setSendingReset(false))
   }
 
+  function handleToggleAccess() {
+    setChangingAccess(true)
+    setSuperAdminAccess(superAdmin.id, !superAdmin.canEdit)
+      .then((resultado) => {
+        if (resultado.error) {
+          toast.error(resultado.error)
+          return
+        }
+        toast.success(
+          superAdmin.canEdit
+            ? `"${superAdmin.username}" agora tem acesso apenas de visualização.`
+            : `"${superAdmin.username}" agora tem acesso completo.`,
+        )
+        router.refresh()
+      })
+      .finally(() => setChangingAccess(false))
+  }
+
   function handleDelete() {
     setDeleting(true)
     deleteUser(superAdmin.id)
@@ -699,6 +731,11 @@ function SuperAdminRow({
       </span>
       {canEdit && (
         <div className="flex items-center gap-2">
+          {!isCurrentUser && (
+            <Button variant="outline" size="sm" onClick={handleToggleAccess} disabled={changingAccess}>
+              {changingAccess ? 'Alterando...' : superAdmin.canEdit ? 'Tornar só visualização' : 'Dar acesso completo'}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setConfirmResetOpen(true)} disabled={sendingReset} className="gap-1.5">
             <Mail className="size-3.5" />
             {sendingReset ? 'Enviando...' : 'Redefinir senha por e-mail'}
@@ -888,12 +925,12 @@ export function SuperAdminDashboard({
         </div>
         <div className="flex items-center gap-2">
           <ProjetosPorSecretariaButton secretarias={secretarias} />
-          <Link href="/admin/usuarios" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
-            <Users className="size-4" />
-            Ver usuários
-          </Link>
           {canEdit && (
             <>
+              <Link href="/admin/usuarios" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
+                <Users className="size-4" />
+                Ver usuários
+              </Link>
               <Button variant="outline" onClick={() => setNovoUsuarioOpen(true)} className="gap-1.5">
                 <UserPlus className="size-4" />
                 Novo usuário
@@ -909,7 +946,7 @@ export function SuperAdminDashboard({
 
       {!canEdit && (
         <p className="text-sm text-muted-foreground">
-          Sua conta tem acesso apenas de visualização: você acompanha os números de todas as secretarias, mas não pode criar, editar ou excluir nada.
+          Sua conta tem acesso apenas de visualização: você acompanha os gráficos de todas as secretarias, mas não pode criar, editar ou excluir nada.
         </p>
       )}
 
@@ -944,20 +981,24 @@ export function SuperAdminDashboard({
         </>
       )}
 
-      <div className="flex justify-start">
-        <Link href="/admin/audit-log" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
-          <ScrollText className="size-4" />
-          Ver registro de auditoria completo
-        </Link>
-      </div>
+      {canEdit && (
+        <div className="flex justify-start">
+          <Link href="/admin/audit-log" className={buttonVariants({ variant: 'outline', className: 'gap-1.5' })}>
+            <ScrollText className="size-4" />
+            Ver registro de auditoria completo
+          </Link>
+        </div>
+      )}
 
       {secretariasFiltradas.length === 0 && busca.trim() ? (
         <p className="text-sm text-muted-foreground">Nenhuma secretaria ou projeto encontrado para &ldquo;{busca}&rdquo;.</p>
       ) : (
-        <SecretariaGrid secretarias={secretariasFiltradas} admins={admins} />
+        <SecretariaGrid secretarias={secretariasFiltradas} />
       )}
 
-      <SuperAdminsSection superAdmins={superAdmins} currentUsername={currentUsername} bootstrapUsername={bootstrapUsername} canEdit={canEdit} />
+      {canEdit && (
+        <SuperAdminsSection superAdmins={superAdmins} currentUsername={currentUsername} bootstrapUsername={bootstrapUsername} canEdit={canEdit} />
+      )}
     </div>
   )
 }

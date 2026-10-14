@@ -43,7 +43,7 @@ import {
   renameIndicadorGrupo,
   setIndicadorEscala,
 } from '@/lib/actions/indicadores'
-import { deleteProjeto, setPrazoAtualizacao, updateProjeto } from '@/lib/actions/projetos'
+import { deleteProjeto, moverProjetoDeSecretaria, setPrazoAtualizacao, updateProjeto } from '@/lib/actions/projetos'
 import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
 import { formatTelefone } from '@/lib/format-telefone'
 import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
@@ -315,6 +315,16 @@ function buildBucketedData(pontos: Indicador[], range: RangeKey, anoReferencia: 
   })
 }
 
+// Total do período conforme o modo escolhido; null quando não há dados suficientes.
+// Diferença: último valor do período menos o primeiro (ignora períodos sem lançamento).
+function totalDosBuckets(buckets: Bucket[], modo: 'soma' | 'diferenca'): number | null {
+  const preenchidos = buckets.filter((bucket) => bucket.valor !== null)
+  if (preenchidos.length === 0) return null
+  if (modo === 'soma') return preenchidos.reduce((soma, bucket) => soma + bucket.valor!, 0)
+  if (preenchidos.length < 2) return null
+  return preenchidos[preenchidos.length - 1].valor! - preenchidos[0].valor!
+}
+
 function RangeSwitcher({ range, onChange }: { range: RangeKey; onChange: (proximoRange: RangeKey) => void }) {
   return (
     <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted/60 p-0.5">
@@ -418,22 +428,28 @@ function IndicadorChart({
   escala: IndicadorEscala | undefined
 }) {
   const unidade = pontos[0]?.unidade ?? null
-  const primeiro = pontos[0].valor
-  const ultimo = pontos[pontos.length - 1].valor
-  const delta = ultimo - primeiro
-  const deltaPct = primeiro !== 0 ? (delta / Math.abs(primeiro)) * 100 : null
   const [range, setRange] = useState<RangeKey>('1ano')
   const [ano, setAno] = useState(() => new Date().getFullYear())
   const [offset, setOffset] = useState(0)
   const dadosBucket = useMemo(() => buildBucketedData(pontos, range, ano, offset), [pontos, range, ano, offset])
   const [modoTotal, setModoTotal] = useState<'soma' | 'diferenca'>('soma')
-  const totalPeriodo = useMemo(() => {
-    if (modoTotal === 'soma') return dadosBucket.reduce((soma, bucket) => soma + (bucket.valor ?? 0), 0)
-    // Diferença: último valor do período menos o primeiro (ignora períodos sem lançamento).
-    const preenchidos = dadosBucket.filter((bucket) => bucket.valor !== null)
-    if (preenchidos.length < 2) return 0
-    return preenchidos[preenchidos.length - 1].valor! - preenchidos[0].valor!
-  }, [dadosBucket, modoTotal])
+  const totalAtual = useMemo(() => totalDosBuckets(dadosBucket, modoTotal), [dadosBucket, modoTotal])
+  const totalPeriodo = totalAtual ?? 0
+  // Comparação: o período selecionado contra o período imediatamente anterior
+  // (mesma janela deslocada). "Total" abrange tudo, então não tem período anterior.
+  const totalAnterior = useMemo(() => {
+    if (range === 'total') return null
+    const anterior =
+      range === '1ano' ? buildBucketedData(pontos, range, ano - 1, offset) : buildBucketedData(pontos, range, ano, offset + 1)
+    return totalDosBuckets(anterior, modoTotal)
+  }, [pontos, range, ano, offset, modoTotal])
+  const comparacao =
+    totalAtual !== null && totalAnterior !== null
+      ? {
+          delta: totalAtual - totalAnterior,
+          pct: totalAnterior !== 0 ? ((totalAtual - totalAnterior) / Math.abs(totalAnterior)) * 100 : null,
+        }
+      : null
   const tickInterval = dadosBucket.length > 15 ? Math.ceil(dadosBucket.length / 10) - 1 : 0
 
   return (
@@ -445,7 +461,12 @@ function IndicadorChart({
           {editable && <EscalaConfigButton projetoId={projetoId} titulo={titulo} escala={escala} />}
           {editable && <DeleteGraficoButton projetoId={projetoId} titulo={titulo} />}
         </div>
-        <DeltaBadge delta={delta} deltaPct={deltaPct} />
+        {comparacao && (
+          <span title="Comparação com o período anterior" className="inline-flex items-center gap-1">
+            <DeltaBadge delta={comparacao.delta} deltaPct={comparacao.pct} />
+            <span className="text-xs text-muted-foreground">vs. anterior</span>
+          </span>
+        )}
       </div>
       <div className="mb-2 flex items-end justify-between gap-2">
         <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValor(totalPeriodo, unidade)}</p>
@@ -1013,17 +1034,26 @@ function DeleteProjetoButton({ projeto }: { projeto: Projeto }) {
   )
 }
 
-export function EditarProjetoButton({ projeto }: { projeto: Projeto }) {
+export function EditarProjetoButton({
+  projeto,
+  secretarias,
+}: {
+  projeto: Projeto
+  // Só o admin supremo (com edição) recebe a lista e pode trocar a secretaria responsável.
+  secretarias?: { id: number; nome: string }[]
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [nome, setNome] = useState(projeto.nome)
   const [descricao, setDescricao] = useState(projeto.descricao ?? '')
   const [responsavelNome, setResponsavelNome] = useState(projeto.responsavel_nome ?? '')
   const [responsavelTelefone, setResponsavelTelefone] = useState(projeto.responsavel_telefone ?? '')
+  const [secretariaId, setSecretariaId] = useState(String(projeto.secretaria_id))
   const [isPending, startTransition] = useTransition()
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
+      setSecretariaId(String(projeto.secretaria_id))
       setNome(projeto.nome)
       setDescricao(projeto.descricao ?? '')
       setResponsavelNome(projeto.responsavel_nome ?? '')
@@ -1037,6 +1067,13 @@ export function EditarProjetoButton({ projeto }: { projeto: Projeto }) {
     startTransition(async () => {
       try {
         await updateProjeto(projeto.id, nome, descricao, responsavelNome, responsavelTelefone)
+        if (secretarias && Number(secretariaId) !== projeto.secretaria_id) {
+          const resultado = await moverProjetoDeSecretaria(projeto.id, Number(secretariaId))
+          if (resultado.error) {
+            toast.error(resultado.error)
+            return
+          }
+        }
         setOpen(false)
         toast.success('Projeto atualizado.')
         router.refresh()
@@ -1095,6 +1132,25 @@ export function EditarProjetoButton({ projeto }: { projeto: Projeto }) {
                 />
               </div>
             </div>
+            {secretarias && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="editar-projeto-secretaria">Secretaria responsável</Label>
+                <Select value={secretariaId} onValueChange={(value) => setSecretariaId(value ?? String(projeto.secretaria_id))}>
+                  <SelectTrigger id="editar-projeto-secretaria" className="w-full">
+                    <SelectValue>
+                      {(value: string | null) => secretarias.find((s) => String(s.id) === value)?.nome ?? null}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {secretarias.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Button type="submit" disabled={isPending} className="mt-1">
               {isPending ? 'Salvando...' : 'Salvar alterações'}
             </Button>
@@ -1178,10 +1234,12 @@ export function ProjetoDashboard({
   projeto,
   editable,
   canDeleteProject = editable,
+  somenteGraficos = false,
 }: {
   projeto: Projeto
   editable: boolean
   canDeleteProject?: boolean
+  somenteGraficos?: boolean
 }) {
   const grupos = useMemo(() => {
     const byTitulo = new Map<string, Indicador[]>()
@@ -1226,10 +1284,12 @@ export function ProjetoDashboard({
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">Todos os valores</h3>
-        <IndicadoresTable indicadores={projeto.indicadores} editable={editable} />
-      </div>
+      {!somenteGraficos && (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">Todos os valores</h3>
+          <IndicadoresTable indicadores={projeto.indicadores} editable={editable} />
+        </div>
+      )}
 
       {canDeleteProject && (
         <div className="flex flex-col gap-3">

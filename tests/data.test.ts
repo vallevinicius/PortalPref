@@ -46,6 +46,7 @@ describe('lib/data', () => {
       id: 1,
       nome: 'Secretaria de Saúde',
       slug: 'secretaria-de-saude',
+      secretarioNome: 'Maria',
       _count: { projetos: 3 },
     })
 
@@ -53,6 +54,7 @@ describe('lib/data', () => {
       id: 1,
       nome: 'Secretaria de Saúde',
       slug: 'secretaria-de-saude',
+      secretario_nome: 'Maria',
       projetos_count: 3,
     })
     expect(prismaMock.secretaria.findUnique).toHaveBeenCalledWith({
@@ -61,6 +63,7 @@ describe('lib/data', () => {
         id: true,
         nome: true,
         slug: true,
+        secretarioNome: true,
         _count: { select: { projetos: true } },
       },
     })

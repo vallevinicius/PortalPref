@@ -53,7 +53,9 @@ function normalizeEntityType(value: string | undefined): AuditEntityType | undef
 }
 
 export async function getAuditLogs(query: AuditLogQuery = {}): Promise<AuditLogPage> {
-  await requireSession('super_admin')
+  const session = await requireSession('super_admin')
+  // Perfil só de visualização não acessa o registro de auditoria.
+  if (session.canEdit === false) throw new Error('Acesso não autorizado.')
   const pageSize = normalizePage(query.pageSize, 25, 100)
   const page = normalizePage(query.page, 1, Number.MAX_SAFE_INTEGER)
   const action = query.action?.trim() || undefined

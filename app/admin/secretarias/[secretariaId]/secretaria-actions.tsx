@@ -20,17 +20,28 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { deleteSecretaria, updateSecretaria } from '@/lib/actions/secretarias'
 
-export function SecretariaActions({ secretariaId, nome, projetosCount }: { secretariaId: number; nome: string; projetosCount: number }) {
+export function SecretariaActions({
+  secretariaId,
+  nome,
+  secretarioNome,
+  projetosCount,
+}: {
+  secretariaId: number
+  nome: string
+  secretarioNome: string | null
+  projetosCount: number
+}) {
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [novoNome, setNovoNome] = useState(nome)
+  const [novoSecretario, setNovoSecretario] = useState(secretarioNome ?? '')
   const [isPending, startTransition] = useTransition()
 
   function handleEdit(event: React.FormEvent) {
     event.preventDefault()
     startTransition(async () => {
-      const resultado = await updateSecretaria(secretariaId, novoNome)
+      const resultado = await updateSecretaria(secretariaId, novoNome, novoSecretario)
       if (resultado.error) {
         toast.error(resultado.error)
         return
@@ -64,6 +75,7 @@ export function SecretariaActions({ secretariaId, nome, projetosCount }: { secre
           className="gap-1.5"
           onClick={() => {
             setNovoNome(nome)
+            setNovoSecretario(secretarioNome ?? '')
             setEditOpen(true)
           }}
         >
@@ -86,7 +98,24 @@ export function SecretariaActions({ secretariaId, nome, projetosCount }: { secre
               <Label htmlFor="editar-secretaria-nome">Nome da secretaria</Label>
               <Input id="editar-secretaria-nome" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} required autoFocus />
             </div>
-            <Button type="submit" disabled={isPending || !novoNome.trim() || novoNome.trim() === nome}>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="editar-secretaria-secretario">Nome do secretário</Label>
+              <Input
+                id="editar-secretaria-secretario"
+                value={novoSecretario}
+                onChange={(e) => setNovoSecretario(e.target.value)}
+                required
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={
+                isPending ||
+                !novoNome.trim() ||
+                !novoSecretario.trim() ||
+                (novoNome.trim() === nome && novoSecretario.trim() === (secretarioNome ?? ''))
+              }
+            >
               {isPending ? 'Salvando...' : 'Salvar'}
             </Button>
           </form>
