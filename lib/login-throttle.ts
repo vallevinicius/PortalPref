@@ -4,7 +4,7 @@ import { getClientIpFromRequest } from '@/lib/request-ip'
 
 export const LOGIN_MAX_FAILURES = 5
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000
-export const LOGIN_BLOCK_MS = 15 * 60 * 1000
+export const LOGIN_BLOCK_MS = 5 * 60 * 1000
 export const LOGIN_RETENTION_MS = 24 * 60 * 60 * 1000
 
 export type LoginThrottleStatus = {
