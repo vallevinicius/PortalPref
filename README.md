@@ -1,270 +1,101 @@
-# Saquá360 — Dashboard de Projetos
+<div align="center">
 
-Aplicação Next.js para gerenciamento de secretarias, projetos e indicadores, utilizando **MySQL**, **Prisma ORM** e migrations versionadas.
+# Saquá360 — Project Dashboard
 
-## 1. Pré-requisitos
+**Project and KPI tracking for the municipal departments of Saquarema (RJ, Brazil).**
 
-Antes de iniciar, instale os seguintes componentes:
+🇧🇷 [Leia em português](README.pt-BR.md)
 
-| Componente | Versão/requisito |
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white) ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white) ![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white) ![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?logo=mysql&logoColor=white) ![Vitest](https://img.shields.io/badge/Vitest-tested-6E9F18?logo=vitest&logoColor=white)
+
+</div>
+
+## About
+
+Internal web app used by the city administration to register each department (*secretaria*), its projects, the people responsible for them and the indicators that measure progress. Administrators get a consolidated view; department users only see and edit what belongs to them. Every change is recorded in an audit log.
+
+## Features
+
+- Departments, projects and multiple owners per project
+- Indicators with configurable scales and update deadlines
+- Role-based access (admin, project admin, read-only / can-edit users)
+- Full audit log of who changed what and when
+- Password reset by e-mail and forced password change on first login
+- Login throttling persisted in the database
+- Charts with Recharts and light/dark theme
+
+## Tech stack
+
+| Layer | Technology |
 |---|---|
-| Node.js | 20 ou superior; Node 22 LTS é recomendado |
-| npm | Incluído com o Node.js |
-| MySQL ou MariaDB | Servidor acessível localmente ou por rede |
-| Git | Necessário para alternar para a branch da implementação |
+| App | Next.js 16 (App Router, Server Actions), React 19, TypeScript |
+| UI | Tailwind CSS 4, shadcn/ui (Base UI), Lucide, Sonner, Recharts |
+| Auth | Signed session cookie (`jose`), `bcryptjs` |
+| Data | MySQL / MariaDB + Prisma ORM with versioned migrations |
+| E-mail | Nodemailer (SMTP) with HTML templates |
+| Tests | Vitest + coverage (v8) |
 
-O projeto não inicia o servidor MySQL automaticamente. Você pode usar uma instalação local, XAMPP, Laragon, Docker ou um servidor MySQL já existente.
+## Architecture
 
-## 2. Obter a branch da implementação
-
-Abra o PowerShell ou o terminal na pasta onde o projeto foi clonado e execute:
-
-```powershell
-git fetch --all
-git switch fix/seed-admin-only
 ```
-
-Confirme a branch atual:
-
-```powershell
-git branch --show-current
+app/            routes (admin area, login, password change) and auth API routes
+lib/actions/    Server Actions: all reads/writes go through here, with authz checks
+lib/            session, permissions, audit, mail and Prisma client
+prisma/         schema + 14 versioned migrations
+scripts/        seeds (admin, departments, metrics)
+templates/      e-mail templates
+tests/          Vitest suites
 ```
+Mutations run as **Server Actions** that check the session and the user's role before touching the database, and write an `AuditLog` entry in the same flow.
 
-O resultado esperado é:
+## Security
 
-```text
-fix/seed-admin-only
-```
+- Session in a signed, httpOnly cookie; passwords hashed with bcrypt
+- Login throttling stored in MySQL (`LoginThrottle`), proxy-aware via `TRUSTED_PROXY_COUNT`
+- Constant-time comparisons for secrets (`timingSafeEqual`)
+- Authorization enforced server-side in every Server Action, not only in the UI
 
-## 3. Instalar as dependências
+## Getting started
 
-Na raiz do projeto, execute:
+**Prerequisites:** Node.js 20+, MySQL 8 or MariaDB
 
-```powershell
+```bash
+cp .env.example .env      # fill in the variables below
 npm install
+npm run db:setup          # prisma generate + migrate dev
+npm run db:seed           # creates the first admin from ADMIN_USERNAME / ADMIN_PASSWORD
+npm run dev               # http://localhost:3002
 ```
+For an existing database (staging/production) use `npm run db:setup:deploy`, which only applies committed migrations.
 
-Esse comando instala o Next.js, Prisma, o cliente Prisma, Vitest, ESLint e as demais dependências do projeto.
+### Environment variables
 
-## 4. Criar e configurar o arquivo `.env`
+`.env.example` — Never commit real values. Copy the example file and fill it locally.
 
-Copie o modelo de ambiente versionado:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-No Prompt de Comando do Windows, o equivalente é:
-
-```cmd
-copy .env.example .env
-```
-
-Para o cenário solicitado, configure o arquivo `.env` desta forma:
-
-```dotenv
-DATABASE_URL="mysql://root:vinicius@localhost:3306/apaixonese"
-PORT=3305
-
-SESSION_SECRET=troque-por-um-segredo-longo-e-aleatorio
-PASSWORD_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
-
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=troque-esta-senha
-```
-
-O Prisma usa exclusivamente `DATABASE_URL` para conectar ao MySQL. A variável `PORT` define a porta HTTP do Next.js; neste caso, o site será aberto em [http://localhost:3305](http://localhost:3305).
-
-Se a senha do MySQL possuir caracteres especiais, como `@`, `#`, `/`, `:` ou espaços, faça URL encoding na senha dentro de `DATABASE_URL`. Por exemplo, `p@ss word` deve ser representada como `p%40ss%20word`.
-
-Nunca versione o arquivo `.env` nem compartilhe os valores reais de `DATABASE_URL`, `SESSION_SECRET`, `PASSWORD_ENCRYPTION_KEY` ou `ADMIN_PASSWORD`.
-
-## 5. Criar o banco e aplicar as migrations com Prisma
-
-Com o MySQL em execução e o usuário da `DATABASE_URL` autorizado a criar bancos, rode:
-
-```powershell
-npm run db:setup
-```
-
-Esse comando executa, em sequência:
-
-```powershell
-npm run prisma:generate
-npm run prisma:migrate
-```
-
-O `prisma generate` cria o cliente TypeScript. O `prisma migrate dev` compara `prisma/schema.prisma`, cria uma migration quando necessário, aplica o histórico ao banco e executa os generators. Em uma base nova, esse é o fluxo recomendado para desenvolvimento.
-
-Você também pode executar as etapas separadamente:
-
-```powershell
-npx prisma generate
-npx prisma migrate dev
-```
-
-Para ambientes que devem apenas aplicar migrations já versionadas, sem criar novas migrations interativamente, use:
-
-```powershell
-npm run db:setup:deploy
-```
-
-Esse comando executa `prisma generate` e `prisma migrate deploy`.
-
-Confira o estado do histórico Prisma sem alterar o banco:
-
-```powershell
-npx prisma migrate status
-```
-
-### Banco já existente
-
-Faça um backup antes de usar `migrate dev` ou `migrate reset` em um banco com dados. O banco `apaixonese` configurado localmente já possui registros na tabela `_prisma_migrations` que não estão presentes nesta branch. Por isso, o status pode indicar histórico divergente.
-
-Para uma instalação de teste limpa, prefira criar um banco novo na URL, por exemplo `apaixonese_dev`, e execute `npm run db:setup`. Se `apaixonese` for descartável e você quiser recriá-lo do zero, faça backup e use o procedimento destrutivo apropriado no seu ambiente antes de rodar novamente `npx prisma migrate dev`.
-
-Não marque `20260817134219_init` como aplicada com `prisma migrate resolve` sem comparar o schema real, pois isso pode fazer o Prisma acreditar que tabelas existentes já correspondem ao schema desta branch.
-
-## 6. Gerar o cliente Prisma
-
-Sempre que o `schema.prisma` for alterado, gere novamente o cliente:
-
-```powershell
-npm run prisma:generate
-```
-
-O cliente gerado fica em `node_modules/@prisma/client` e não deve ser versionado manualmente.
-
-## 7. Popular os dados iniciais
-
-Depois que as migrations estiverem aplicadas, execute o seed padrão:
-
-```powershell
-npm run db:seed
-```
-
-Esse comando cria ou atualiza **somente o super administrador** usando `ADMIN_USERNAME` e `ADMIN_PASSWORD`. Ele não cria secretarias, projetos, indicadores nem eventos históricos de auditoria. Os comandos `db:seed-secretarias` e `db:seed-metricas` continuam separados e só devem ser executados quando você quiser explicitamente inserir dados iniciais de negócio.
-
-Os seeds de secretarias e métricas são idempotentes dentro de suas próprias regras; o seed padrão do administrador pode ser executado com segurança para atualizar a senha e o papel do super administrador.
-
-## 8. Iniciar o site em desenvolvimento
-
-Execute:
-
-```powershell
-npm run dev
-```
-
-Abra [http://localhost:3000](http://localhost:3000) no navegador. Use `ADMIN_USERNAME` e `ADMIN_PASSWORD` do `.env` para entrar como administrador supremo.
-
-A aplicação possui as principais rotas abaixo:
-
-| Rota | Finalidade |
+| Variable | Description |
 |---|---|
-| `/` | Página inicial/login |
-| `/admin` | Dashboard administrativo |
-| `/admin/secretarias/:secretariaId` | Projetos e indicadores de uma secretaria |
-| `/admin/projetos/:projetoId` | Detalhes e edição de um projeto |
-| `/api/auth/login` | Login via API |
-| `/api/auth/logout` | Encerramento da sessão |
-| `/admin/audit-log` | Histórico completo, filtros e paginação; disponível somente para `super_admin` |
+| `DATABASE_URL` | MySQL connection string |
+| `SESSION_SECRET` | Long random secret used to sign the session cookie |
+| `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the app (for client IP) |
+| `ADMIN_USERNAME / ADMIN_PASSWORD` | First admin account created by the seed |
+| `MAIL_HOST / MAIL_PORT / MAIL_USER / MAIL_PASS` | SMTP settings for password-reset e-mails |
 
-## 9. Registro de auditoria e controle de acesso
+### Scripts
 
-O sistema registra somente eventos relevantes de gestão e segurança: criação de secretarias e usuários, criação, alteração e exclusão de projetos e indicadores, além de redefinição e visualização de credenciais. Login, logout, abertura da página e filtros de consulta não geram novos registros. Cada evento contém o responsável, a ação, a entidade, o identificador relacionado, o usuário afetado quando aplicável, detalhes estruturados e data/hora.
-
-A leitura do registro de auditoria é protegida em dois níveis: a página server-side redireciona usuários não autenticados ou que não sejam `super_admin`, e a função de consulta exige novamente `requireSession('super_admin')`. Portanto, administradores de secretaria não conseguem obter os eventos nem acessando a rota diretamente.
-
-O super administrador acessa o histórico pelo botão **Ver registro de auditoria completo** no dashboard ou diretamente em `/admin/audit-log`. A tela permite filtrar por ação, tipo de entidade e ator, além de navegar por páginas. A coluna **Resumo e informações** apresenta uma explicação em linguagem simples e traduz os campos técnicos, como secretaria relacionada e perfil de acesso. Senhas e outros segredos nunca são armazenados nos detalhes dos eventos. Registros antigos de login, logout, consulta e seed permanecem preservados no banco, mas são ignorados na listagem operacional.
-
-### Proteção de visibilidade e acesso
-
-O site inteiro envia metadata e o cabeçalho `X-Robots-Tag` com `noindex`, `nofollow`, `noarchive`, `nosnippet` e `noimageindex`. O endpoint `robots.txt` bloqueia o rastreamento de todas as rotas e não existe sitemap público. Essas medidas reduzem a descoberta por buscadores, mas não substituem a autenticação: as rotas administrativas continuam protegidas no servidor.
-
-A rota de login possui proteção operacional persistente. Cinco falhas dentro de uma janela de 15 minutos bloqueiam temporariamente novas tentativas por 15 minutos, considerando tanto o usuário quanto a origem da requisição. O banco armazena somente chaves hash, nunca o endereço ou a senha em texto claro. Um login válido limpa as falhas anteriores daquele usuário e origem. A API retorna `429` com `Retry-After` durante o bloqueio.
-
-## 10. Executar os testes unitários
-
-Para executar todos os testes uma vez:
-
-```powershell
-npm test
-```
-
-Para executar em modo de observação durante o desenvolvimento:
-
-```powershell
-npm run test:watch
-```
-
-Para gerar cobertura, caso o provider de cobertura esteja instalado no ambiente:
-
-```powershell
-npm run test:coverage
-```
-
-A suíte criada para esta implementação cobre as ações de secretarias, projetos, indicadores e usuários, a camada de leitura agregada, o login, o logout, o throttling persistente, os contratos de visibilidade do site, o helper de auditoria, a consulta protegida do registro de auditoria e o singleton de configuração do Prisma. Os testes utilizam mocks do Prisma e não dependem de um banco real. A branch atual foi validada com **71 testes passando**.
-
-## 11. Executar lint, TypeScript e build
-
-Use os comandos abaixo antes de abrir um pull request:
-
-```powershell
-npm run lint
-npx tsc --noEmit
-npm run build
-```
-
-O build de produção pode carregar as variáveis de `.env`, portanto mantenha o arquivo configurado mesmo quando o objetivo for apenas validar a compilação.
-
-## 12. Abrir o Prisma Studio
-
-Para inspecionar os registros pelo painel do Prisma:
-
-```powershell
-npm run prisma:studio
-```
-
-O comando abre o Prisma Studio em uma porta local informada pelo terminal. Feche o processo com `Ctrl+C` quando terminar.
-
-## 13. Criar uma nova migration
-
-Quando uma alteração de banco for necessária, edite `prisma/schema.prisma`, gere uma migration nomeada e valide o resultado:
-
-```powershell
-npm run prisma:migrate -- --name nome_da_alteracao
-npm run prisma:generate
-npx prisma migrate status
-npm test
-npm run lint
-npm run build
-```
-
-A pasta criada em `prisma/migrations` deve ser versionada junto com a alteração do schema. Não edite migrations já aplicadas em outros ambientes; crie uma nova migration.
-
-## 14. Resetar um banco de desenvolvimento
-
-O comando abaixo é destrutivo: ele apaga os dados do banco configurado e reaplica o histórico de migrations.
-
-```powershell
-npx prisma migrate reset
-```
-
-Use-o somente em banco descartável de desenvolvimento. Nunca execute esse comando contra produção ou contra uma base contendo dados que não estejam protegidos por backup.
-
-## 15. Solução de problemas comuns
-
-| Problema | Verificação/recomendação |
+| Command | Description |
 |---|---|
-| `Can't reach database server` | Confirme se o MySQL está em execução, se a porta está correta e se `DATABASE_URL` aponta para o host certo. |
-| `Unknown database` | Execute `npm run db:setup` e confirme se o usuário da `DATABASE_URL` tem permissão para criar o banco. |
-| `P1001` ou `P1003` | Revise host, porta, usuário, senha e nome do banco na `DATABASE_URL`. |
-| `P3006`/`P3018` perto de `-- CreateTable` | Atualize para o commit que remove o BOM UTF-8 da migration, confirme que o arquivo começa diretamente com `-- CreateTable` e repita `npx prisma migrate dev` em um banco de desenvolvimento. |
-| Erro de autenticação no site | Confirme os valores usados no seed e execute `npm run db:seed` novamente. |
-| `prisma generate` com cliente desatualizado | Execute `npm run prisma:generate` depois de alterar o schema. |
-| Tabela já existente durante a migration inicial | Pare, faça backup e avalie o procedimento de baseline com `prisma migrate resolve --applied`; não apague tabelas sem confirmação. |
-| Porta 3000 ocupada | Inicie com outra porta usando `npm run dev -- -p 3001` e abra `http://localhost:3001`. |
+| `npm run dev` | Dev server on port 3002 |
+| `npm run build` | `prisma generate` + production build |
+| `npm test` | Run the Vitest suite |
+| `npm run test:coverage` | Tests with coverage report |
+| `npm run lint` | ESLint |
+| `npm run prisma:studio` | Prisma Studio |
 
-## 16. Estado da implementação
+## Testing
 
-A branch `fix/seed-admin-only` deriva de `feat/audit-log` e reúne a correção do seed padrão com a interface amigável do registro de auditoria. O comando `npm run db:seed` executa somente a criação/atualização do super administrador, sem popular dados de negócio ou histórico. A validação da branch alcançou **61 testes passando**, além de TypeScript, lint e build.
+20 Vitest test files under `tests/` covering permissions, session handling, audit and server actions. Run `npm test`.
+
+## Team
+
+- [Vinícius Diller](https://github.com/viniciusdiller)
+- [Vinicius do Valle](https://github.com/vallevinicius)
