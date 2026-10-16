@@ -1,7 +1,18 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
+import localFont from 'next/font/local'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
+
+const gilroy = localFont({
+  src: [
+    { path: './fonts/Gilroy-Regular.ttf', weight: '400', style: 'normal' },
+    { path: './fonts/Gilroy-Medium.ttf', weight: '500', style: 'normal' },
+    { path: './fonts/Gilroy-Bold.ttf', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-gilroy',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Saquá360',
@@ -30,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="pt-BR" className="bg-background">
+    <html lang="pt-BR" className={`${gilroy.variable} bg-background`}>
       <body className="antialiased" suppressHydrationWarning>
         {children}
         <Toaster theme="light" position="top-right" richColors />
