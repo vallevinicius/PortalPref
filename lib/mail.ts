@@ -3,8 +3,8 @@ import path from 'node:path'
 import nodemailer from 'nodemailer'
 
 const TEMPLATES_DIR = path.join(process.cwd(), 'templates', 'emails')
-const LOGO_PATH = path.join(process.cwd(), 'public', 'Pref.png')
-const LOGO_CID = 'logo-prefeitura'
+const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-saqua360-branca.png')
+const LOGO_CID = 'logo-saqua360'
 
 function getTransporter() {
   const host = process.env.MAIL_HOST
@@ -43,14 +43,14 @@ export async function sendVerificationCodeEmail(to: string, code: string) {
   const transporter = getTransporter()
 
   await transporter.sendMail({
-    from: `"Portal de Dados Integrados" <${process.env.MAIL_USER}>`,
+    from: `"Saquá360" <${process.env.MAIL_USER}>`,
     to,
-    subject: 'Seu código de confirmação do Portal de Dados Integrados',
+    subject: 'Seu código de confirmação do Saquá360',
     text: `Sua conta foi criada com uma senha padrão. Para confirmar seu e-mail e definir sua própria senha, digite este código na tela de troca de senha: ${code}\n\nEste código expira em 1 hora. Se você já trocou sua senha ou não reconhece esta solicitação, pode ignorar esta mensagem.`,
     html: renderEmail('redefinir-senha', { CODE: code }),
     attachments: [
       {
-        filename: 'Pref.png',
+        filename: 'logo-saqua360-branca.png',
         path: LOGO_PATH,
         cid: LOGO_CID,
       },

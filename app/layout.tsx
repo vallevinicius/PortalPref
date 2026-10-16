@@ -4,8 +4,8 @@ import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Portal de Dados | Prefeitura de Saquarema',
-  description: 'Acesso institucional restrito ao Portal de Dados Integrados da Prefeitura Municipal de Saquarema.',
+  title: 'Saquá360',
+  description: 'Acesso institucional restrito ao Saquá360.',
   generator: 'v0.app',
   robots: {
     index: false,
@@ -13,9 +13,6 @@ export const metadata: Metadata = {
     noarchive: true,
     nosnippet: true,
     noimageindex: true,
-  },
-  icons: {
-    icon: '/favicon.ico',
   },
 }
 

@@ -69,10 +69,10 @@ export function TrocarSenhaForm() {
       <CardHeader className="items-center gap-5 px-6 pb-2 pt-8 text-center sm:px-10 sm:pt-10">
         <div className="relative inline-flex items-center justify-center rounded-2xl border border-accent/30 bg-primary px-6 py-4 shadow-lg shadow-primary/20">
           <Image
-            src="/Pref.png"
-            alt="Prefeitura Municipal de Saquarema"
-            width={296}
-            height={100}
+            src="/logo-saqua360-branca.png"
+            alt="Saquá360"
+            width={1060}
+            height={280}
             className="h-10 w-auto sm:h-11"
             priority
           />

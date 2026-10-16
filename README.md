@@ -1,4 +1,4 @@
-# PortalPref — Dashboard de Projetos
+# Saquá360 — Dashboard de Projetos
 
 Aplicação Next.js para gerenciamento de secretarias, projetos e indicadores, utilizando **MySQL**, **Prisma ORM** e migrations versionadas.
 
