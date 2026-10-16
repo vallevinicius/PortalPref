@@ -48,7 +48,7 @@ import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
 import { formatTelefone } from '@/lib/format-telefone'
 import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
 
-const LINE_COLOR = '#006e6d'
+const LINE_COLOR = '#00b8ab'
 const GRID_COLOR = '#e1e0d9'
 const MUTED_TEXT = '#898781'
 
@@ -134,7 +134,7 @@ function DeltaBadge({ delta, deltaPct }: { delta: number; deltaPct: number | nul
     <span
       className={cn(
         'inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium',
-        subiu ? 'bg-accent/15 text-[#00504c]' : 'bg-destructive/10 text-destructive',
+        subiu ? 'bg-accent/15 text-[#003d39]' : 'bg-destructive/10 text-destructive',
       )}
     >
       {subiu ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}

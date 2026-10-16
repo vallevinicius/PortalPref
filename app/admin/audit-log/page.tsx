@@ -148,7 +148,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">Registro de auditoria</h2>
-          <p className="text-sm text-muted-foreground">Consulte, de forma simples, todas as atividades realizadas no Portal de Dados Integrados, inclusive as ações dos administradores supremos.</p>
+          <p className="text-sm text-muted-foreground">Consulte, de forma simples, todas as atividades realizadas no Saquá360, inclusive as ações dos administradores supremos.</p>
         </div>
         <Link href="/admin" className={buttonVariants({ variant: 'outline' })}>Voltar ao painel</Link>
       </div>

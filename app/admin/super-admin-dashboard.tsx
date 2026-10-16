@@ -522,7 +522,7 @@ function SecretariaCard({ secretaria }: { secretaria: Secretaria }) {
   return (
     <Link
       href={`/admin/secretarias/${secretaria.id}`}
-      className="group relative flex h-40 flex-col justify-end overflow-hidden rounded-2xl bg-linear-to-br from-primary to-[#004847] p-4 text-left shadow-md ring-1 ring-black/5 transition-transform duration-150 hover:-translate-y-1 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group relative flex h-40 flex-col justify-end overflow-hidden rounded-2xl bg-linear-to-br from-primary to-[#00756c] p-4 text-left shadow-md ring-1 ring-black/5 transition-transform duration-150 hover:-translate-y-1 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Icon
         aria-hidden="true"

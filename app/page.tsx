@@ -63,10 +63,10 @@ export default function Page() {
         <CardHeader className="items-center gap-5 px-6 pb-2 pt-8 text-center sm:px-10 sm:pt-10">
           <div className="relative inline-flex items-center justify-center rounded-2xl border border-accent/30 bg-primary px-6 py-4 shadow-lg shadow-primary/20">
             <Image
-              src="/Pref.png"
-              alt="Prefeitura Municipal de Saquarema"
-              width={296}
-              height={100}
+              src="/logo-saqua360-branca.png"
+              alt="Saquá360"
+              width={1060}
+              height={280}
               className="h-10 w-auto sm:h-11"
               priority
             />
@@ -74,10 +74,10 @@ export default function Page() {
           </div>
           <div className="flex flex-col gap-2">
             <p className="font-mono text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-primary">
-              Prefeitura Municipal de Saquarema
+              Portal de Dados Integrados
             </p>
             <h1 className="text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-[1.7rem]">
-              Portal de Dados Integrados
+              Saquá360
             </h1>
             <p className="text-sm leading-6 text-muted-foreground">
               Ambiente institucional de acesso controlado
@@ -89,7 +89,7 @@ export default function Page() {
           <div role="alert" className="flex gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3.5 text-left">
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
             <p className="text-xs leading-5 text-destructive">
-              Acesso estritamente restrito a servidores e sistemas autorizados da Prefeitura de Saquarema. Todo acesso é monitorado.
+              Acesso estritamente restrito a servidores e sistemas autorizados do Saquá360. Todo acesso é monitorado.
             </p>
           </div>
 

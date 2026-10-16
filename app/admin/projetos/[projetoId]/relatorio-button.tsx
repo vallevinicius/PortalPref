@@ -65,7 +65,7 @@ function GraficoBarras({ pontos, unidade }: { pontos: Indicador[]; unidade: stri
         const [, mes, dia] = ponto.data_referencia.split('-')
         return (
           <g key={ponto.id}>
-            <rect x={x} y={y} width={larguraBarra} height={Math.max(alturaBarra, 1)} rx={2} fill="#006e6d" />
+            <rect x={x} y={y} width={larguraBarra} height={Math.max(alturaBarra, 1)} rx={2} fill="#00b8ab" />
             {mostrarValores && (
               <text x={x + larguraBarra / 2} y={ponto.valor >= 0 ? y - 4 : y + alturaBarra + 11} textAnchor="middle" fontSize={9} fontWeight={600} fill="#111">
                 {new Intl.NumberFormat('pt-BR').format(ponto.valor)}
@@ -200,7 +200,7 @@ export function RelatorioButton({ projeto }: { projeto: Projeto }) {
                   <td className="rel-conteudo">
                     <header className="rel-topo">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/Pref.png" alt="Prefeitura Municipal de Saquarema" className="rel-logo" />
+                      <img src="/logo-saqua360.png" alt="Saquá360" className="rel-logo" />
                       <div className="rel-topo-info">
                         <strong>Relatório de projeto</strong>
                         <span>Emitido em {formatData(isoDate(new Date()))}</span>
@@ -289,7 +289,7 @@ export function RelatorioButton({ projeto }: { projeto: Projeto }) {
                 </tr>
               </tbody>
             </table>
-            <footer className="rel-rodape">Portal de Dados Integrados · Prefeitura Municipal de Saquarema</footer>
+            <footer className="rel-rodape">Saquá360</footer>
           </div>,
           document.body,
         )}
