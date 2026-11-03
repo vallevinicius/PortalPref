@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS indicadores (
   titulo VARCHAR(255) NOT NULL,
   valor DECIMAL(16,2) NOT NULL,
   unidade VARCHAR(30) NULL,
+  tipo_valor VARCHAR(10) NOT NULL DEFAULT 'numero',
   data_referencia DATE NOT NULL,
   created_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
