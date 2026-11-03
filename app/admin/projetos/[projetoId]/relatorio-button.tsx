@@ -245,6 +245,51 @@ export function RelatorioButton({ projeto }: { projeto: Projeto }) {
                       const soma = grupo.pontos.reduce((total, ponto) => total + ponto.valor, 0)
                       const media = soma / grupo.pontos.length
                       const diferenca = grupo.pontos[grupo.pontos.length - 1].valor - grupo.pontos[0].valor
+                      if (grupo.pontos[0].tipo_grafico === 'pizza') {
+                        const porCategoria = new Map<string, number>()
+                        for (const ponto of grupo.pontos) {
+                          const categoria = ponto.categoria ?? 'Sem categoria'
+                          porCategoria.set(categoria, (porCategoria.get(categoria) ?? 0) + ponto.valor)
+                        }
+                        const linhas = Array.from(porCategoria, ([categoria, valor]) => ({ categoria, valor })).sort((x, y) => y.valor - x.valor)
+                        return (
+                          <section key={grupo.titulo} className="rel-grafico">
+                            <h2>{grupo.titulo}</h2>
+                            <div className="rel-kpis">
+                              <div>
+                                <span>Lançamentos</span>
+                                <strong>{grupo.pontos.length}</strong>
+                              </div>
+                              <div>
+                                <span>Total</span>
+                                <strong>{formatNumero(soma, unidade, tipoValor)}</strong>
+                              </div>
+                              <div>
+                                <span>Categorias</span>
+                                <strong>{linhas.length}</strong>
+                              </div>
+                            </div>
+                            <table className="rel-dados">
+                              <thead>
+                                <tr>
+                                  <th>Categoria</th>
+                                  <th>Valor</th>
+                                  <th>%</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {linhas.map((linha) => (
+                                  <tr key={linha.categoria}>
+                                    <td>{linha.categoria}</td>
+                                    <td>{formatNumero(linha.valor, unidade, tipoValor)}</td>
+                                    <td>{soma > 0 ? `${((linha.valor / soma) * 100).toFixed(0)}%` : '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </section>
+                        )
+                      }
                       return (
                         <section key={grupo.titulo} className="rel-grafico">
                           <h2>{grupo.titulo}</h2>

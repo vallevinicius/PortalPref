@@ -3,7 +3,7 @@
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Clock, Gauge, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import {
@@ -48,6 +48,7 @@ import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
 import { formatValorIndicador, type TipoValor } from '@/lib/format-valor'
 import { formatTelefone } from '@/lib/format-telefone'
 import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
+import { CATEGORIA_MAX_LENGTH, type TipoGrafico } from '@/lib/tipo-grafico'
 
 const LINE_COLOR = '#00b8ab'
 const GRID_COLOR = '#e1e0d9'
@@ -527,6 +528,156 @@ function IndicadorChart({
   )
 }
 
+const PIZZA_CORES = ['#00b8ab', '#003d39', '#2a78d6', '#eb6834', '#eda100', '#e87ba4', '#4a3aa7']
+const PIZZA_COR_OUTRAS = '#c3c2b7'
+const PIZZA_MAX_FATIAS = 7
+const SEM_CATEGORIA = 'Sem categoria'
+
+type PizzaRange = 'mes' | 'ano' | 'total'
+
+const PIZZA_RANGES: { key: PizzaRange; label: string }[] = [
+  { key: 'mes', label: 'Mês' },
+  { key: 'ano', label: 'Ano' },
+  { key: 'total', label: 'Total' },
+]
+
+interface PizzaFatia {
+  nome: string
+  valor: number
+  cor: string
+}
+
+// Soma os lançamentos de cada categoria dentro do período e agrupa o excedente em "Outras".
+function buildPizzaFatias(pontos: Indicador[], range: PizzaRange, ano: number, offset: number): PizzaFatia[] {
+  const hoje = new Date()
+  const referencia = new Date(hoje.getFullYear(), hoje.getMonth() - offset, 1)
+
+  const totais = new Map<string, number>()
+  for (const ponto of pontos) {
+    const data = pontoDate(ponto)
+    if (range === 'mes' && (data.getFullYear() !== referencia.getFullYear() || data.getMonth() !== referencia.getMonth())) continue
+    if (range === 'ano' && data.getFullYear() !== ano) continue
+    if (ponto.valor <= 0) continue
+    const categoria = ponto.categoria ?? SEM_CATEGORIA
+    totais.set(categoria, (totais.get(categoria) ?? 0) + ponto.valor)
+  }
+
+  const ordenadas = Array.from(totais, ([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor)
+  const fatias = ordenadas.slice(0, PIZZA_MAX_FATIAS).map((item, indice) => ({ ...item, cor: PIZZA_CORES[indice % PIZZA_CORES.length] }))
+  const resto = ordenadas.slice(PIZZA_MAX_FATIAS)
+  if (resto.length > 0) {
+    fatias.push({ nome: `Outras (${resto.length})`, valor: resto.reduce((soma, item) => soma + item.valor, 0), cor: PIZZA_COR_OUTRAS })
+  }
+  return fatias
+}
+
+function PizzaChart({
+  titulo,
+  pontos,
+  projetoId,
+  editable,
+}: {
+  titulo: string
+  pontos: Indicador[]
+  projetoId: number
+  editable: boolean
+}) {
+  const unidade = pontos[0]?.unidade ?? null
+  const tipoValor = pontos[0]?.tipo_valor ?? 'numero'
+  const [range, setRange] = useState<PizzaRange>('mes')
+  const [ano, setAno] = useState(() => new Date().getFullYear())
+  const [offset, setOffset] = useState(0)
+  const fatias = useMemo(() => buildPizzaFatias(pontos, range, ano, offset), [pontos, range, ano, offset])
+  const total = fatias.reduce((soma, fatia) => soma + fatia.valor, 0)
+  const categorias = useMemo(
+    () => Array.from(new Set(pontos.map((ponto) => ponto.categoria).filter((c): c is string => !!c))).sort((a, b) => a.localeCompare(b)),
+    [pontos],
+  )
+  const referenciaMes = new Date(new Date().getFullYear(), new Date().getMonth() - offset, 1)
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
+      <div className="mb-1 flex items-center gap-1">
+        <p className="text-sm font-medium text-foreground">{titulo}</p>
+        {editable && <RenomearGraficoButton projetoId={projetoId} tituloAtual={titulo} />}
+        {editable && <DeleteGraficoButton projetoId={projetoId} titulo={titulo} />}
+      </div>
+      <p className="mb-2 text-2xl font-semibold tracking-tight text-foreground">{formatValorIndicador(total, tipoValor, unidade)}</p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+        <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted/60 p-0.5">
+          {PIZZA_RANGES.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              onClick={() => {
+                setRange(preset.key)
+                setOffset(0)
+              }}
+              className={cn(
+                'whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                preset.key === range
+                  ? 'bg-card text-foreground shadow-sm ring-1 ring-foreground/10'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        {range === 'ano' && <YearSwitcher ano={ano} onChange={setAno} />}
+        {range === 'mes' && (
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => setOffset(offset + 1)} aria-label="Mês anterior">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <span className="min-w-16 whitespace-nowrap text-center text-xs font-medium text-foreground">
+              {formatMesAno(referenciaMes.getFullYear(), referenciaMes.getMonth())}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setOffset(Math.max(0, offset - 1))}
+              disabled={offset === 0}
+              aria-label="Próximo mês"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+      {fatias.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">Nenhum lançamento neste período.</p>
+      ) : (
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <PieChart width={180} height={180} className="shrink-0 outline-none [&_svg]:outline-none [&_path]:outline-none [&_path]:focus:outline-none">
+            <Pie data={fatias} dataKey="valor" nameKey="nome" cx="50%" cy="50%" innerRadius={34} outerRadius={80} paddingAngle={2}>
+              {fatias.map((fatia) => (
+                <Cell key={fatia.nome} fill={fatia.cor} stroke="#ffffff" strokeWidth={2} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(value, nome) => [formatValorIndicador(Number(value), tipoValor, unidade), nome]} />
+          </PieChart>
+          <ul className="flex min-w-0 flex-1 flex-col gap-1.5 self-stretch sm:justify-center">
+            {fatias.map((fatia) => (
+              <li key={fatia.nome} className="flex items-start justify-between gap-3 text-sm">
+                <span className="flex min-w-0 items-start gap-2">
+                  <span aria-hidden="true" className="mt-1 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: fatia.cor }} />
+                  <span className="text-foreground">{fatia.nome}</span>
+                </span>
+                <span className="shrink-0 whitespace-nowrap text-muted-foreground">
+                  {formatValorIndicador(fatia.valor, tipoValor, unidade)} · {((fatia.valor / total) * 100).toFixed(0)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {editable && <NovoIndicadorForm projetoId={projetoId} titulo={titulo} tipoValor={tipoValor} tipoGrafico="pizza" categorias={categorias} />}
+    </div>
+  )
+}
+
 function EscalaConfigButton({
   projetoId,
   titulo,
@@ -642,8 +793,21 @@ function todayLocalISODate() {
   return `${yyyy}-${mm}-${dd}`
 }
 
-function NovoIndicadorForm({ projetoId, titulo, tipoValor }: { projetoId: number; titulo: string; tipoValor: TipoValor }) {
+function NovoIndicadorForm({
+  projetoId,
+  titulo,
+  tipoValor,
+  tipoGrafico = 'barras',
+  categorias = [],
+}: {
+  projetoId: number
+  titulo: string
+  tipoValor: TipoValor
+  tipoGrafico?: TipoGrafico
+  categorias?: string[]
+}) {
   const router = useRouter()
+  const [categoria, setCategoria] = useState('')
   const [valor, setValor] = useState('')
   const [data, setData] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -652,7 +816,7 @@ function NovoIndicadorForm({ projetoId, titulo, tipoValor }: { projetoId: number
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createIndicador(projetoId, titulo, Number(valor), '', data || todayLocalISODate(), tipoValor)
+        await createIndicador(projetoId, titulo, Number(valor), '', data || todayLocalISODate(), tipoValor, tipoGrafico, tipoGrafico === 'pizza' ? categoria : null)
         setValor('')
         setData('')
         toast.success('Número adicionado.')
@@ -664,7 +828,46 @@ function NovoIndicadorForm({ projetoId, titulo, tipoValor }: { projetoId: number
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-3 flex items-center gap-2">
+    <form onSubmit={handleSubmit} className={tipoGrafico === 'pizza' ? 'mt-3 flex flex-wrap items-center gap-2' : 'mt-3 flex items-center gap-2'}>
+      {tipoGrafico === 'pizza' && (
+        <>
+          {categorias.length > 0 && (
+            <div className="flex w-full flex-wrap gap-1.5" role="group" aria-label="Categorias já usadas">
+              {categorias.map((nome) => (
+                <button
+                  key={nome}
+                  type="button"
+                  onClick={() => setCategoria(nome)}
+                  aria-pressed={categoria === nome}
+                  className={cn(
+                    'rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition-colors',
+                    categoria === nome
+                      ? 'bg-primary text-primary-foreground ring-primary'
+                      : 'bg-muted/60 text-muted-foreground ring-foreground/10 hover:text-foreground',
+                  )}
+                >
+                  {nome}
+                </button>
+              ))}
+            </div>
+          )}
+          <Input
+            list={`categorias-${projetoId}-${titulo}`}
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            placeholder={categorias.length > 0 ? 'Ou digite uma nova categoria' : 'Categoria (ex.: UBS Centro)'}
+            aria-label={`Categoria para ${titulo}`}
+            maxLength={CATEGORIA_MAX_LENGTH}
+            className="h-8 w-full"
+            required
+          />
+          <datalist id={`categorias-${projetoId}-${titulo}`}>
+            {categorias.map((nome) => (
+              <option key={nome} value={nome} />
+            ))}
+          </datalist>
+        </>
+      )}
       <Input
         type="number"
         step="any"
@@ -672,7 +875,7 @@ function NovoIndicadorForm({ projetoId, titulo, tipoValor }: { projetoId: number
         onChange={(e) => setValor(e.target.value)}
         placeholder={tipoValor === 'dinheiro' ? 'Novo valor (R$)' : 'Novo valor'}
         aria-label={`Novo valor para ${titulo}`}
-        className="h-8 flex-1"
+        className="h-8 min-w-24 flex-1"
         required
       />
       <Input
@@ -695,6 +898,8 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
   const [open, setOpen] = useState(false)
   const [nome, setNome] = useState('')
   const [tipoValor, setTipoValor] = useState<TipoValor>('numero')
+  const [tipoGrafico, setTipoGrafico] = useState<TipoGrafico>('barras')
+  const [categoria, setCategoria] = useState('')
   const [valor, setValor] = useState('')
   const [data, setData] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -703,9 +908,11 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createIndicador(projetoId, nome, Number(valor), '', data || todayLocalISODate(), tipoValor)
+        await createIndicador(projetoId, nome, Number(valor), '', data || todayLocalISODate(), tipoValor, tipoGrafico, tipoGrafico === 'pizza' ? categoria : null)
         setNome('')
         setTipoValor('numero')
+        setTipoGrafico('barras')
+        setCategoria('')
         setValor('')
         setData('')
         setOpen(false)
@@ -742,6 +949,18 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
+              <Label htmlFor="novo-grafico-formato">Tipo de gráfico</Label>
+              <Select value={tipoGrafico} onValueChange={(value) => setTipoGrafico(value === 'pizza' ? 'pizza' : 'barras')}>
+                <SelectTrigger id="novo-grafico-formato" className="w-full">
+                  <SelectValue>{tipoGrafico === 'pizza' ? 'Pizza (por categoria)' : 'Barras (evolução no tempo)'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="barras">Barras (evolução no tempo)</SelectItem>
+                  <SelectItem value="pizza">Pizza (por categoria)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="novo-grafico-tipo">Tipo de valor</Label>
               <Select value={tipoValor} onValueChange={(value) => setTipoValor(value === 'dinheiro' ? 'dinheiro' : 'numero')}>
                 <SelectTrigger id="novo-grafico-tipo" className="w-full">
@@ -753,6 +972,19 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
                 </SelectContent>
               </Select>
             </div>
+            {tipoGrafico === 'pizza' && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="novo-grafico-categoria">Primeira categoria</Label>
+                <Input
+                  id="novo-grafico-categoria"
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value)}
+                  placeholder="Ex.: UBS Centro"
+                  maxLength={CATEGORIA_MAX_LENGTH}
+                  required
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="novo-grafico-valor">{tipoValor === 'dinheiro' ? 'Valor inicial (R$)' : 'Quantidade inicial'}</Label>
               <Input
@@ -962,7 +1194,7 @@ function IndicadoresTable({ indicadores, editable }: { indicadores: Indicador[];
           <tbody>
             {itensDaPagina.map((indicador) => (
               <tr key={indicador.id} className="border-t border-border">
-                <td className="px-3 py-2 text-muted-foreground">{indicador.titulo}</td>
+                <td className="px-3 py-2 text-muted-foreground">{indicador.categoria ? `${indicador.titulo} · ${indicador.categoria}` : indicador.titulo}</td>
                 <td className="px-3 py-2">{formatValorIndicador(indicador.valor, indicador.tipo_valor, indicador.unidade)}</td>
                 <td className="px-3 py-2">{formatDataLonga(indicador.data_referencia)}</td>
                 {editable && (
@@ -1285,7 +1517,10 @@ export function ProjetoDashboard({
         <p className="text-sm text-muted-foreground">Nenhum número lançado ainda por este projeto.</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {grupos.map((grupo) => (
+          {grupos.map((grupo) =>
+            grupo.pontos[0]?.tipo_grafico === 'pizza' ? (
+              <PizzaChart key={grupo.titulo} titulo={grupo.titulo} pontos={grupo.pontos} projetoId={projeto.id} editable={editable} />
+            ) : (
             <IndicadorChart
               key={grupo.titulo}
               titulo={grupo.titulo}
@@ -1294,7 +1529,8 @@ export function ProjetoDashboard({
               editable={editable}
               escala={escalasPorTitulo.get(grupo.titulo)}
             />
-          ))}
+            ),
+          )}
         </div>
       )}
 

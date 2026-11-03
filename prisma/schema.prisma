@@ -92,6 +92,8 @@ model Indicador {
   valor          Decimal   @db.Decimal(16, 2)
   unidade        String?   @db.VarChar(30)
   tipoValor      String    @default("numero") @map("tipo_valor") @db.VarChar(10)
+  tipoGrafico    String    @default("barras") @map("tipo_grafico") @db.VarChar(10)
+  categoria      String?   @db.VarChar(120)
   dataReferencia DateTime  @map("data_referencia") @db.Date
   createdBy      Int?      @map("created_by")
   createdAt      DateTime  @default(now()) @map("created_at")
