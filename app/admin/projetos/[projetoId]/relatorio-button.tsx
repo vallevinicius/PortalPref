@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { Indicador, Projeto } from '@/lib/data'
+import { formatValorIndicador, type TipoValor } from '@/lib/format-valor'
 
 function isoDate(data: Date) {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`
@@ -18,9 +19,8 @@ function formatData(iso: string) {
   return `${dia}/${mes}/${ano}`
 }
 
-function formatNumero(valor: number, unidade: string | null) {
-  const numero = new Intl.NumberFormat('pt-BR').format(valor)
-  return unidade ? `${numero} ${unidade}` : numero
+function formatNumero(valor: number, unidade: string | null, tipoValor: TipoValor) {
+  return formatValorIndicador(valor, tipoValor, unidade)
 }
 
 const PRESETS = [
@@ -68,7 +68,7 @@ function GraficoBarras({ pontos, unidade }: { pontos: Indicador[]; unidade: stri
             <rect x={x} y={y} width={larguraBarra} height={Math.max(alturaBarra, 1)} rx={2} fill="#00b8ab" />
             {mostrarValores && (
               <text x={x + larguraBarra / 2} y={ponto.valor >= 0 ? y - 4 : y + alturaBarra + 11} textAnchor="middle" fontSize={9} fontWeight={600} fill="#111">
-                {new Intl.NumberFormat('pt-BR').format(ponto.valor)}
+                {formatValorIndicador(ponto.valor, ponto.tipo_valor)}
               </text>
             )}
             {indice % intervaloRotulo === 0 && (
@@ -241,6 +241,7 @@ export function RelatorioButton({ projeto }: { projeto: Projeto }) {
 
                     {grupos.map((grupo) => {
                       const unidade = grupo.pontos[0]?.unidade ?? null
+                      const tipoValor = grupo.pontos[0]?.tipo_valor ?? 'numero'
                       const soma = grupo.pontos.reduce((total, ponto) => total + ponto.valor, 0)
                       const media = soma / grupo.pontos.length
                       const diferenca = grupo.pontos[grupo.pontos.length - 1].valor - grupo.pontos[0].valor
@@ -254,15 +255,15 @@ export function RelatorioButton({ projeto }: { projeto: Projeto }) {
                             </div>
                             <div>
                               <span>Soma</span>
-                              <strong>{formatNumero(soma, unidade)}</strong>
+                              <strong>{formatNumero(soma, unidade, tipoValor)}</strong>
                             </div>
                             <div>
                               <span>Média</span>
-                              <strong>{formatNumero(Math.round(media * 100) / 100, unidade)}</strong>
+                              <strong>{formatNumero(Math.round(media * 100) / 100, unidade, tipoValor)}</strong>
                             </div>
                             <div>
                               <span>Diferença (último − primeiro)</span>
-                              <strong>{formatNumero(diferenca, unidade)}</strong>
+                              <strong>{formatNumero(diferenca, unidade, tipoValor)}</strong>
                             </div>
                           </div>
                           <GraficoBarras pontos={grupo.pontos} unidade={unidade} />
@@ -277,7 +278,7 @@ export function RelatorioButton({ projeto }: { projeto: Projeto }) {
                               {grupo.pontos.map((ponto) => (
                                 <tr key={ponto.id}>
                                   <td>{formatData(ponto.data_referencia)}</td>
-                                  <td>{formatNumero(ponto.valor, unidade)}</td>
+                                  <td>{formatNumero(ponto.valor, unidade, tipoValor)}</td>
                                 </tr>
                               ))}
                             </tbody>
