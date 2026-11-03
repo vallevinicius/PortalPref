@@ -1,4 +1,5 @@
 import { UserRole } from '@prisma/client'
+import { isTipoValor, type TipoValor } from '@/lib/format-valor'
 import { prisma } from '@/lib/prisma'
 
 export interface Secretaria {
@@ -49,6 +50,7 @@ export interface Indicador {
   titulo: string
   valor: number
   unidade: string | null
+  tipo_valor: TipoValor
   data_referencia: string
 }
 
@@ -91,6 +93,7 @@ function mapIndicador(indicador: {
   titulo: string
   valor: unknown
   unidade: string | null
+  tipoValor: string
   dataReferencia: Date
 }): Indicador {
   return {
@@ -98,6 +101,7 @@ function mapIndicador(indicador: {
     titulo: indicador.titulo,
     valor: Number(indicador.valor),
     unidade: indicador.unidade,
+    tipo_valor: isTipoValor(indicador.tipoValor) ? indicador.tipoValor : 'numero',
     data_referencia: formatDate(indicador.dataReferencia),
   }
 }
@@ -116,6 +120,7 @@ function mapProjeto(projeto: {
     titulo: string
     valor: unknown
     unidade: string | null
+    tipoValor: string
     dataReferencia: Date
   }>
   indicadorEscalas: Array<{
@@ -155,6 +160,7 @@ const projetoRelations = {
       titulo: true,
       valor: true,
       unidade: true,
+      tipoValor: true,
       dataReferencia: true,
     },
   },

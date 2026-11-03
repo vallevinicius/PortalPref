@@ -1,3 +1,4 @@
+import { formatValorIndicador, isTipoValor } from '@/lib/format-valor'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
@@ -146,7 +147,7 @@ const AUDIT_DETAIL_LABELS: Record<string, string> = {
 
 // "valor"/"unidade" ganham sua própria coluna na tela de auditoria (getAuditValor),
 // então saem da lista genérica de detalhes para não aparecer duas vezes.
-const INTERNAL_DETAIL_KEYS = new Set(['seedKey', 'valor', 'unidade'])
+const INTERNAL_DETAIL_KEYS = new Set(['seedKey', 'valor', 'unidade', 'tipoValor'])
 
 function humanizeDetailKey(key: string) {
   return key
@@ -201,9 +202,8 @@ export function getAuditDetailEntries(details: unknown): AuditDetailEntry[] {
 export function getAuditValor(details: unknown): string | null {
   if (!details || typeof details !== 'object' || Array.isArray(details)) return null
 
-  const { valor, unidade } = details as Record<string, unknown>
+  const { valor, unidade, tipoValor } = details as Record<string, unknown>
   if (typeof valor !== 'number' || !Number.isFinite(valor)) return null
 
-  const valorFormatado = new Intl.NumberFormat('pt-BR').format(valor)
-  return typeof unidade === 'string' && unidade ? `${valorFormatado} ${unidade}` : valorFormatado
+  return formatValorIndicador(valor, isTipoValor(tipoValor) ? tipoValor : 'numero', typeof unidade === 'string' && unidade ? unidade : null)
 }
