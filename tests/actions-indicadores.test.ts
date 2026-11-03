@@ -69,7 +69,7 @@ describe('ações de indicadores', () => {
 
     expect(prismaMock.indicador.findFirst).toHaveBeenCalledWith({
       where: { projetoId: 20, titulo: 'Atendimentos' },
-      select: { id: true },
+      select: { id: true, tipoValor: true },
     })
     expect(prismaMock.indicador.create).toHaveBeenCalledWith({
       data: {
@@ -77,6 +77,7 @@ describe('ações de indicadores', () => {
         titulo: 'Atendimentos',
         valor: 123.45,
         unidade: 'pessoas',
+        tipoValor: 'numero',
         dataReferencia: new Date('2026-03-15T00:00:00.000Z'),
         createdBy: 5,
       },
@@ -88,7 +89,7 @@ describe('ações de indicadores', () => {
         entityType: 'indicator',
         entityId: 31,
         targetUserId: null,
-        details: { titulo: 'Atendimentos', valor: 123.45, unidade: 'pessoas', projetoId: 20, secretariaId: 10 },
+        details: { titulo: 'Atendimentos', valor: 123.45, unidade: 'pessoas', tipoValor: 'numero', projetoId: 20, secretariaId: 10 },
       },
     })
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin')
@@ -103,6 +104,39 @@ describe('ações de indicadores', () => {
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ action: 'indicator.add_value' }) }),
     )
+  })
+
+  it('cria gráfico de dinheiro quando o tipo "dinheiro" é escolhido', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await createIndicador(20, 'Arrecadação', 1500.5, '', '2026-03-15', 'dinheiro')
+
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ titulo: 'Arrecadação', tipoValor: 'dinheiro' }),
+    })
+    expect(prismaMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ details: expect.objectContaining({ tipoValor: 'dinheiro' }) }) }),
+    )
+  })
+
+  it('novos números lançados num gráfico existente herdam o tipo do gráfico, ignorando o tipo enviado', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+    prismaMock.indicador.findFirst.mockResolvedValue({ id: 7, tipoValor: 'dinheiro' })
+
+    await createIndicador(20, 'Arrecadação', 10, '', '2026-03-16', 'numero')
+
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tipoValor: 'dinheiro' }),
+    })
+  })
+
+  it('rejeita tipo de valor desconhecido antes de persistir', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await expect(createIndicador(20, 'Arrecadação', 10, '', '2026-03-16', 'euro' as never)).rejects.toThrow(
+      'Escolha se o gráfico é de número ou de dinheiro.',
+    )
+    expect(prismaMock.indicador.create).not.toHaveBeenCalled()
   })
 
   it.each([
