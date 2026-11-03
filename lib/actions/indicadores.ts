@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { assertCanEdit, requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
 import { recordAuditLog } from '@/lib/audit-log'
+import { isTipoValor, type TipoValor } from '@/lib/format-valor'
 import { prisma } from '@/lib/prisma'
 
 function parseDataReferencia(value: string) {
@@ -53,7 +54,7 @@ async function assertProjetoAccess(projetoId: number, session: SessionPayload) {
 async function assertIndicadorAccess(indicadorId: number, session: SessionPayload) {
   const indicador = await prisma.indicador.findUnique({
     where: { id: indicadorId },
-    select: { id: true, projetoId: true, projeto: { select: { secretariaId: true } } },
+    select: { id: true, projetoId: true, tipoValor: true, projeto: { select: { secretariaId: true } } },
   })
 
   if (!indicador) {
@@ -100,19 +101,26 @@ export async function createIndicador(
   valor: number,
   unidade: string,
   dataReferencia: string,
+  tipoValor: TipoValor = 'numero',
 ) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   assertCanEdit(session)
   const projeto = await assertProjetoAccess(projetoId, session)
   const validated = validateIndicador(titulo, valor, dataReferencia)
+  if (!isTipoValor(tipoValor)) {
+    throw new Error('Escolha se o gráfico é de número ou de dinheiro.')
+  }
 
   // Cada "gráfico" é, por baixo dos panos, um grupo de indicadores com o mesmo título.
   // Se já existe algum indicador com esse título neste projeto, isso aqui é só um novo
   // número lançado no gráfico existente — não a criação de um gráfico novo.
   const grupoJaExiste = await prisma.indicador.findFirst({
     where: { projetoId, titulo: validated.titulo },
-    select: { id: true },
+    select: { id: true, tipoValor: true },
   })
+
+  // O tipo é definido na criação do gráfico; novos números lançados herdam o do grupo.
+  const tipoFinal: TipoValor = grupoJaExiste && isTipoValor(grupoJaExiste.tipoValor) ? grupoJaExiste.tipoValor : tipoValor
 
   const indicador = await prisma.indicador.create({
     data: {
@@ -120,6 +128,7 @@ export async function createIndicador(
       titulo: validated.titulo,
       valor,
       unidade: unidade.trim() || null,
+      tipoValor: tipoFinal,
       dataReferencia: validated.dataReferencia,
       createdBy: session.userId,
     },
@@ -134,6 +143,7 @@ export async function createIndicador(
       titulo: indicador.titulo,
       valor: Number(indicador.valor),
       unidade: indicador.unidade,
+      tipoValor: tipoFinal,
       projetoId: indicador.projetoId,
       secretariaId: projeto.secretariaId,
     },
@@ -216,6 +226,7 @@ export async function updateIndicador(
       titulo: validated.titulo,
       valor,
       unidade: unidade.trim() || null,
+      tipoValor: indicador.tipoValor,
       secretariaId: indicador.projeto.secretariaId,
     },
   })

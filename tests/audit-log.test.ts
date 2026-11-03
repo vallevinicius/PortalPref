@@ -85,6 +85,11 @@ describe('helper do registro de auditoria', () => {
     expect(getAuditValor({ titulo: 'Processos', valor: 1000, unidade: 'pessoas' })).toBe('1.000 pessoas')
   })
 
+  it('formata o valor lançado como moeda brasileira quando o gráfico é de dinheiro', () => {
+    expect(getAuditValor({ titulo: 'Arrecadação', valor: 1500.5, unidade: null, tipoValor: 'dinheiro' })).toMatch(/^R\$\s1\.500,50$/)
+    expect(getAuditValor({ titulo: 'Processos', valor: 1000, tipoValor: 'numero' })).toBe('1.000')
+  })
+
   it('retorna null quando a atividade não tem um valor numérico associado', () => {
     expect(getAuditValor({ nome: 'Projeto Saúde' })).toBeNull()
     expect(getAuditValor({ valor: 'não é número' })).toBeNull()

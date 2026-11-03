@@ -45,6 +45,7 @@ import {
 } from '@/lib/actions/indicadores'
 import { deleteProjeto, moverProjetoDeSecretaria, setPrazoAtualizacao, updateProjeto } from '@/lib/actions/projetos'
 import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
+import { formatValorIndicador, type TipoValor } from '@/lib/format-valor'
 import { formatTelefone } from '@/lib/format-telefone'
 import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
 
@@ -52,10 +53,6 @@ const LINE_COLOR = '#00b8ab'
 const GRID_COLOR = '#e1e0d9'
 const MUTED_TEXT = '#898781'
 
-function formatValor(valor: number, unidade: string | null) {
-  const numero = new Intl.NumberFormat('pt-BR').format(valor)
-  return unidade ? `${numero} ${unidade}` : numero
-}
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -100,10 +97,12 @@ function ChartTooltip({
   active,
   payload,
   unidade,
+  tipoValor,
 }: {
   active?: boolean
   payload?: { payload: Bucket }[]
   unidade: string | null
+  tipoValor: TipoValor
 }) {
   if (!active || !payload?.length) return null
   const point = payload[0].payload
@@ -112,7 +111,7 @@ function ChartTooltip({
     <div className="rounded-lg bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-foreground/10">
       <div className="flex items-center gap-1.5">
         <span aria-hidden="true" className="h-0.5 w-3 rounded-full" style={{ backgroundColor: LINE_COLOR }} />
-        <p className="font-semibold text-foreground">{formatValor(point.valor, unidade)}</p>
+        <p className="font-semibold text-foreground">{formatValorIndicador(point.valor, tipoValor, unidade)}</p>
       </div>
       <p className="text-xs text-muted-foreground">{formatDataLonga(point.data_referencia)}</p>
     </div>
@@ -143,14 +142,14 @@ function DeltaBadge({ delta, deltaPct }: { delta: number; deltaPct: number | nul
   )
 }
 
-function BarValueLabel(props: Record<string, unknown> & { unidade: string | null }) {
-  const { x, y, width, value, unidade } = props
+function BarValueLabel(props: Record<string, unknown> & { unidade: string | null; tipoValor: TipoValor }) {
+  const { x, y, width, value, unidade, tipoValor } = props
   if (typeof x !== 'number' || typeof y !== 'number' || typeof width !== 'number' || typeof value !== 'number') {
     return null
   }
   return (
     <text x={x + width / 2} y={y - 6} textAnchor="middle" fontSize={11} fontWeight={600} fill="#0b0b0b">
-      {formatValor(value, unidade)}
+      {formatValorIndicador(value, tipoValor, unidade)}
     </text>
   )
 }
@@ -428,6 +427,7 @@ function IndicadorChart({
   escala: IndicadorEscala | undefined
 }) {
   const unidade = pontos[0]?.unidade ?? null
+  const tipoValor = pontos[0]?.tipo_valor ?? 'numero'
   const [range, setRange] = useState<RangeKey>('1ano')
   const [ano, setAno] = useState(() => new Date().getFullYear())
   const [offset, setOffset] = useState(0)
@@ -469,7 +469,7 @@ function IndicadorChart({
         )}
       </div>
       <div className="mb-2 flex items-end justify-between gap-2">
-        <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValor(totalPeriodo, unidade)}</p>
+        <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValorIndicador(totalPeriodo, tipoValor, unidade)}</p>
         <div className="flex items-center gap-2">
           {escala && modoTotal === 'soma' && <EscalaBadge valor={totalPeriodo} escala={escala} />}
           <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5" role="group" aria-label="Tipo de total">
@@ -515,14 +515,14 @@ function IndicadorChart({
               interval={tickInterval}
             />
             <YAxis tick={{ fontSize: 11, fill: MUTED_TEXT }} axisLine={false} tickLine={false} width={44} />
-            <Tooltip content={<ChartTooltip unidade={unidade} />} cursor={{ fill: 'rgba(0,110,109,0.07)' }} />
+            <Tooltip content={<ChartTooltip unidade={unidade} tipoValor={tipoValor} />} cursor={{ fill: 'rgba(0,110,109,0.07)' }} />
             <Bar dataKey="valor" fill={LINE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={22}>
-              <LabelList dataKey="valor" content={(props) => <BarValueLabel {...props} unidade={unidade} />} />
+              <LabelList dataKey="valor" content={(props) => <BarValueLabel {...props} unidade={unidade} tipoValor={tipoValor} />} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-      {editable && <NovoIndicadorForm projetoId={projetoId} titulo={titulo} />}
+      {editable && <NovoIndicadorForm projetoId={projetoId} titulo={titulo} tipoValor={tipoValor} />}
     </div>
   )
 }
@@ -642,7 +642,7 @@ function todayLocalISODate() {
   return `${yyyy}-${mm}-${dd}`
 }
 
-function NovoIndicadorForm({ projetoId, titulo }: { projetoId: number; titulo: string }) {
+function NovoIndicadorForm({ projetoId, titulo, tipoValor }: { projetoId: number; titulo: string; tipoValor: TipoValor }) {
   const router = useRouter()
   const [valor, setValor] = useState('')
   const [data, setData] = useState('')
@@ -652,7 +652,7 @@ function NovoIndicadorForm({ projetoId, titulo }: { projetoId: number; titulo: s
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createIndicador(projetoId, titulo, Number(valor), '', data || todayLocalISODate())
+        await createIndicador(projetoId, titulo, Number(valor), '', data || todayLocalISODate(), tipoValor)
         setValor('')
         setData('')
         toast.success('Número adicionado.')
@@ -670,7 +670,7 @@ function NovoIndicadorForm({ projetoId, titulo }: { projetoId: number; titulo: s
         step="any"
         value={valor}
         onChange={(e) => setValor(e.target.value)}
-        placeholder="Novo valor"
+        placeholder={tipoValor === 'dinheiro' ? 'Novo valor (R$)' : 'Novo valor'}
         aria-label={`Novo valor para ${titulo}`}
         className="h-8 flex-1"
         required
@@ -694,6 +694,7 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [nome, setNome] = useState('')
+  const [tipoValor, setTipoValor] = useState<TipoValor>('numero')
   const [valor, setValor] = useState('')
   const [data, setData] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -702,8 +703,9 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
     event.preventDefault()
     startTransition(async () => {
       try {
-        await createIndicador(projetoId, nome, Number(valor), '', data || todayLocalISODate())
+        await createIndicador(projetoId, nome, Number(valor), '', data || todayLocalISODate(), tipoValor)
         setNome('')
+        setTipoValor('numero')
         setValor('')
         setData('')
         setOpen(false)
@@ -740,7 +742,19 @@ function NovoGraficoButton({ projetoId }: { projetoId: number }) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="novo-grafico-valor">Quantidade inicial</Label>
+              <Label htmlFor="novo-grafico-tipo">Tipo de valor</Label>
+              <Select value={tipoValor} onValueChange={(value) => setTipoValor(value === 'dinheiro' ? 'dinheiro' : 'numero')}>
+                <SelectTrigger id="novo-grafico-tipo" className="w-full">
+                  <SelectValue>{tipoValor === 'dinheiro' ? 'Dinheiro (R$)' : 'Número normal'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="numero">Número normal</SelectItem>
+                  <SelectItem value="dinheiro">Dinheiro (R$)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="novo-grafico-valor">{tipoValor === 'dinheiro' ? 'Valor inicial (R$)' : 'Quantidade inicial'}</Label>
               <Input
                 id="novo-grafico-valor"
                 type="number"
@@ -904,7 +918,7 @@ function DeleteIndicadorButton({ indicador }: { indicador: Indicador }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir este número?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isso vai excluir o valor &ldquo;{formatValor(indicador.valor, indicador.unidade)}&rdquo; de{' '}
+              Isso vai excluir o valor &ldquo;{formatValorIndicador(indicador.valor, indicador.tipo_valor, indicador.unidade)}&rdquo; de{' '}
               {formatDataLonga(indicador.data_referencia)} do gráfico &ldquo;{indicador.titulo}&rdquo;. Essa ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -949,7 +963,7 @@ function IndicadoresTable({ indicadores, editable }: { indicadores: Indicador[];
             {itensDaPagina.map((indicador) => (
               <tr key={indicador.id} className="border-t border-border">
                 <td className="px-3 py-2 text-muted-foreground">{indicador.titulo}</td>
-                <td className="px-3 py-2">{formatValor(indicador.valor, indicador.unidade)}</td>
+                <td className="px-3 py-2">{formatValorIndicador(indicador.valor, indicador.tipo_valor, indicador.unidade)}</td>
                 <td className="px-3 py-2">{formatDataLonga(indicador.data_referencia)}</td>
                 {editable && (
                   <td className="px-3 py-2 text-right">
