@@ -129,6 +129,7 @@ const AUDIT_DETAIL_LABELS: Record<string, string> = {
   titulo: 'Título',
   valor: 'Valor',
   unidade: 'Unidade',
+  categoria: 'Categoria',
   dataReferencia: 'Data de referência',
   secretariaId: 'Secretaria relacionada',
   projetoId: 'Projeto relacionado',

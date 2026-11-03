@@ -69,7 +69,7 @@ describe('ações de indicadores', () => {
 
     expect(prismaMock.indicador.findFirst).toHaveBeenCalledWith({
       where: { projetoId: 20, titulo: 'Atendimentos' },
-      select: { id: true, tipoValor: true },
+      select: { id: true, tipoValor: true, tipoGrafico: true },
     })
     expect(prismaMock.indicador.create).toHaveBeenCalledWith({
       data: {
@@ -78,6 +78,8 @@ describe('ações de indicadores', () => {
         valor: 123.45,
         unidade: 'pessoas',
         tipoValor: 'numero',
+        tipoGrafico: 'barras',
+        categoria: null,
         dataReferencia: new Date('2026-03-15T00:00:00.000Z'),
         createdBy: 5,
       },
@@ -128,6 +130,68 @@ describe('ações de indicadores', () => {
     expect(prismaMock.indicador.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ tipoValor: 'dinheiro' }),
     })
+  })
+
+  it('cria gráfico de pizza com a categoria normalizada e registra a categoria na auditoria', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await createIndicador(20, 'Encaminhamentos', 12, '', '2026-03-15', 'numero', 'pizza', '  UBS Centro  ')
+
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ titulo: 'Encaminhamentos', tipoGrafico: 'pizza', categoria: 'UBS Centro' }),
+    })
+    expect(prismaMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ details: expect.objectContaining({ categoria: 'UBS Centro' }) }) }),
+    )
+  })
+
+  it.each([[''], ['   '], [null]])('exige categoria no gráfico de pizza (%j)', async (categoria) => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await expect(createIndicador(20, 'Encaminhamentos', 12, '', '2026-03-15', 'numero', 'pizza', categoria)).rejects.toThrow(
+      'Informe a categoria do lançamento',
+    )
+    expect(prismaMock.indicador.create).not.toHaveBeenCalled()
+  })
+
+  it('rejeita categoria maior que o limite', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await expect(createIndicador(20, 'Encaminhamentos', 12, '', '2026-03-15', 'numero', 'pizza', 'x'.repeat(121))).rejects.toThrow(
+      'no máximo 120',
+    )
+    expect(prismaMock.indicador.create).not.toHaveBeenCalled()
+  })
+
+  it('descarta a categoria enviada em gráfico de barras', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await createIndicador(20, 'Atendimentos', 5, '', '2026-03-15', 'numero', 'barras', 'UBS Centro')
+
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tipoGrafico: 'barras', categoria: null }),
+    })
+  })
+
+  it('novos lançamentos herdam o tipo de gráfico (pizza) e exigem categoria', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+    prismaMock.indicador.findFirst.mockResolvedValue({ id: 7, tipoValor: 'numero', tipoGrafico: 'pizza' })
+
+    await expect(createIndicador(20, 'Encaminhamentos', 3, '', '2026-03-16')).rejects.toThrow('Informe a categoria')
+
+    await createIndicador(20, 'Encaminhamentos', 3, '', '2026-03-16', 'numero', 'barras', 'UBS Bacaxá')
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tipoGrafico: 'pizza', categoria: 'UBS Bacaxá' }),
+    })
+  })
+
+  it('rejeita tipo de gráfico desconhecido antes de persistir', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+
+    await expect(createIndicador(20, 'X', 1, '', '2026-03-16', 'numero', 'radar' as never)).rejects.toThrow(
+      'Escolha se o gráfico é de barras ou de pizza.',
+    )
+    expect(prismaMock.indicador.create).not.toHaveBeenCalled()
   })
 
   it('rejeita tipo de valor desconhecido antes de persistir', async () => {

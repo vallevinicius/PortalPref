@@ -5,6 +5,7 @@ import { assertCanEdit, requireSession, UnauthorizedError, type SessionPayload }
 import { recordAuditLog } from '@/lib/audit-log'
 import { isTipoValor, type TipoValor } from '@/lib/format-valor'
 import { prisma } from '@/lib/prisma'
+import { CATEGORIA_MAX_LENGTH, isTipoGrafico, type TipoGrafico } from '@/lib/tipo-grafico'
 
 function parseDataReferencia(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -102,6 +103,8 @@ export async function createIndicador(
   unidade: string,
   dataReferencia: string,
   tipoValor: TipoValor = 'numero',
+  tipoGrafico: TipoGrafico = 'barras',
+  categoria: string | null = null,
 ) {
   const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
   assertCanEdit(session)
@@ -110,17 +113,31 @@ export async function createIndicador(
   if (!isTipoValor(tipoValor)) {
     throw new Error('Escolha se o gráfico é de número ou de dinheiro.')
   }
+  if (!isTipoGrafico(tipoGrafico)) {
+    throw new Error('Escolha se o gráfico é de barras ou de pizza.')
+  }
 
   // Cada "gráfico" é, por baixo dos panos, um grupo de indicadores com o mesmo título.
   // Se já existe algum indicador com esse título neste projeto, isso aqui é só um novo
   // número lançado no gráfico existente — não a criação de um gráfico novo.
   const grupoJaExiste = await prisma.indicador.findFirst({
     where: { projetoId, titulo: validated.titulo },
-    select: { id: true, tipoValor: true },
+    select: { id: true, tipoValor: true, tipoGrafico: true },
   })
 
   // O tipo é definido na criação do gráfico; novos números lançados herdam o do grupo.
   const tipoFinal: TipoValor = grupoJaExiste && isTipoValor(grupoJaExiste.tipoValor) ? grupoJaExiste.tipoValor : tipoValor
+  const tipoGraficoFinal: TipoGrafico =
+    grupoJaExiste && isTipoGrafico(grupoJaExiste.tipoGrafico) ? grupoJaExiste.tipoGrafico : tipoGrafico
+
+  // No gráfico de pizza cada lançamento pertence a uma categoria (ex.: o posto de saúde).
+  const categoriaFinal = tipoGraficoFinal === 'pizza' ? (categoria ?? '').trim() : null
+  if (tipoGraficoFinal === 'pizza' && !categoriaFinal) {
+    throw new Error('Informe a categoria do lançamento (ex.: o nome do posto).')
+  }
+  if (categoriaFinal && categoriaFinal.length > CATEGORIA_MAX_LENGTH) {
+    throw new Error(`A categoria pode ter no máximo ${CATEGORIA_MAX_LENGTH} caracteres.`)
+  }
 
   const indicador = await prisma.indicador.create({
     data: {
@@ -129,6 +146,8 @@ export async function createIndicador(
       valor,
       unidade: unidade.trim() || null,
       tipoValor: tipoFinal,
+      tipoGrafico: tipoGraficoFinal,
+      categoria: categoriaFinal,
       dataReferencia: validated.dataReferencia,
       createdBy: session.userId,
     },
@@ -144,6 +163,7 @@ export async function createIndicador(
       valor: Number(indicador.valor),
       unidade: indicador.unidade,
       tipoValor: tipoFinal,
+      ...(categoriaFinal ? { categoria: categoriaFinal } : {}),
       projetoId: indicador.projetoId,
       secretariaId: projeto.secretariaId,
     },

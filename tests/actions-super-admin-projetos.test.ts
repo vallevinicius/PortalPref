@@ -162,6 +162,8 @@ describe('indicadores em projetos gerenciados pelo super administrador', () => {
         valor: 10,
         unidade: 'pessoas',
         tipoValor: 'numero',
+        tipoGrafico: 'barras',
+        categoria: null,
         dataReferencia: new Date('2026-01-01T00:00:00.000Z'),
         createdBy: 1,
       },
