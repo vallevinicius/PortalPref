@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Clock, Gauge, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Clock, Gauge, Minus, Pencil, Pin, Plus, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -41,16 +41,19 @@ import {
   deleteIndicadorGrupo,
   removeIndicadorEscala,
   renameIndicadorGrupo,
+  setIndicadorModoTotalPadrao,
   setIndicadorEscala,
 } from '@/lib/actions/indicadores'
 import { deleteProjeto, moverProjetoDeSecretaria, setPrazoAtualizacao, updateProjeto } from '@/lib/actions/projetos'
 import type { Indicador, IndicadorEscala, Projeto } from '@/lib/data'
 import { formatValorIndicador, type TipoValor } from '@/lib/format-valor'
+import type { ModoTotal } from '@/lib/modo-total'
 import { formatTelefone } from '@/lib/format-telefone'
 import { PRAZO_PRESETS } from '@/lib/prazo-atualizacao'
 import { CATEGORIA_MAX_LENGTH, type TipoGrafico } from '@/lib/tipo-grafico'
 
 const LINE_COLOR = '#00b8ab'
+const INACTIVE_BAR_COLOR = '#d4d3cc'
 const GRID_COLOR = '#e1e0d9'
 const MUTED_TEXT = '#898781'
 
@@ -433,17 +436,59 @@ function IndicadorChart({
   const [ano, setAno] = useState(() => new Date().getFullYear())
   const [offset, setOffset] = useState(0)
   const dadosBucket = useMemo(() => buildBucketedData(pontos, range, ano, offset), [pontos, range, ano, offset])
-  const [modoTotal, setModoTotal] = useState<'soma' | 'diferenca'>('soma')
-  const totalAtual = useMemo(() => totalDosBuckets(dadosBucket, modoTotal), [dadosBucket, modoTotal])
+  const modoPadrao = pontos[0]?.modo_total_padrao ?? 'soma'
+  const [modoTotal, setModoTotal] = useState<ModoTotal>(modoPadrao)
+  const [salvandoPadrao, startSalvarPadrao] = useTransition()
+  const router = useRouter()
+  // Colunas clicadas (pelo rótulo): só elas entram no total e as demais ficam cinza.
+  const [selecionados, setSelecionados] = useState<string[]>([])
+  const temSelecao = selecionados.length > 0
+  const modoBuckets = modoTotal === 'diferenca' ? 'diferenca' : 'soma'
+  const bucketsConsiderados = useMemo(
+    () => (temSelecao ? dadosBucket.filter((bucket) => selecionados.includes(bucket.label)) : dadosBucket),
+    [dadosBucket, selecionados, temSelecao],
+  )
+  // Último dado: o lançamento mais recente do gráfico (maior data; em empate, o lançado por último).
+  const ultimoPonto = useMemo(
+    () =>
+      pontos.reduce<Indicador | null>(
+        (atual, ponto) =>
+          !atual || ponto.data_referencia > atual.data_referencia || (ponto.data_referencia === atual.data_referencia && ponto.id > atual.id)
+            ? ponto
+            : atual,
+        null,
+      ),
+    [pontos],
+  )
+  const totalAtual = useMemo(
+    () => (modoTotal === 'ultimo' ? (ultimoPonto?.valor ?? null) : totalDosBuckets(bucketsConsiderados, modoBuckets)),
+    [modoTotal, ultimoPonto, bucketsConsiderados, modoBuckets],
+  )
   const totalPeriodo = totalAtual ?? 0
+
+  function alternarSelecao(label: string) {
+    setSelecionados((atuais) => (atuais.includes(label) ? atuais.filter((item) => item !== label) : [...atuais, label]))
+  }
+
+  function salvarPadrao() {
+    startSalvarPadrao(async () => {
+      try {
+        await setIndicadorModoTotalPadrao(projetoId, titulo, modoTotal)
+        toast.success('Total padrão salvo.')
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Não foi possível salvar o total padrão.')
+      }
+    })
+  }
   // Comparação: o período selecionado contra o período imediatamente anterior
   // (mesma janela deslocada). "Total" abrange tudo, então não tem período anterior.
   const totalAnterior = useMemo(() => {
-    if (range === 'total') return null
+    if (range === 'total' || modoTotal === 'ultimo' || temSelecao) return null
     const anterior =
       range === '1ano' ? buildBucketedData(pontos, range, ano - 1, offset) : buildBucketedData(pontos, range, ano, offset + 1)
-    return totalDosBuckets(anterior, modoTotal)
-  }, [pontos, range, ano, offset, modoTotal])
+    return totalDosBuckets(anterior, modoBuckets)
+  }, [pontos, range, ano, offset, modoTotal, modoBuckets, temSelecao])
   const comparacao =
     totalAtual !== null && totalAnterior !== null
       ? {
@@ -470,11 +515,24 @@ function IndicadorChart({
         )}
       </div>
       <div className="mb-2 flex items-end justify-between gap-2">
-        <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValorIndicador(totalPeriodo, tipoValor, unidade)}</p>
+        <div>
+          <p className="text-2xl font-semibold tracking-tight text-foreground">{formatValorIndicador(totalPeriodo, tipoValor, unidade)}</p>
+          {modoTotal === 'ultimo' && ultimoPonto && (
+            <p className="text-xs text-muted-foreground">Lançado em {formatDataLonga(ultimoPonto.data_referencia)}</p>
+          )}
+          {modoTotal !== 'ultimo' && temSelecao && (
+            <p className="text-xs text-muted-foreground">
+              {selecionados.length} coluna{selecionados.length === 1 ? '' : 's'} selecionada{selecionados.length === 1 ? '' : 's'} ·{' '}
+              <button type="button" onClick={() => setSelecionados([])} className="underline underline-offset-2 hover:text-foreground">
+                limpar
+              </button>
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
-          {escala && modoTotal === 'soma' && <EscalaBadge valor={totalPeriodo} escala={escala} />}
+          {escala && modoTotal === 'soma' && !temSelecao && <EscalaBadge valor={totalPeriodo} escala={escala} />}
           <div className="flex items-center gap-0.5 rounded-lg bg-muted/60 p-0.5" role="group" aria-label="Tipo de total">
-            {(['soma', 'diferenca'] as const).map((modo) => (
+            {(['soma', 'diferenca', 'ultimo'] as const).map((modo) => (
               <button
                 key={modo}
                 type="button"
@@ -487,9 +545,24 @@ function IndicadorChart({
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {modo === 'soma' ? 'Soma' : 'Diferença'}
+                {modo === 'soma' ? 'Soma' : modo === 'diferenca' ? 'Diferença' : 'Último dado'}
               </button>
             ))}
+            {editable && (
+              <button
+                type="button"
+                onClick={salvarPadrao}
+                disabled={salvandoPadrao || modoTotal === modoPadrao}
+                title={modoTotal === modoPadrao ? 'Este é o total padrão do gráfico' : 'Definir como o total que aparece ao abrir o gráfico'}
+                aria-label="Definir como total padrão"
+                className={cn(
+                  'rounded-md p-1 transition-colors disabled:cursor-default',
+                  modoTotal === modoPadrao ? 'text-accent' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Pin className={cn('size-3.5', modoTotal === modoPadrao && 'fill-current')} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -499,10 +572,28 @@ function IndicadorChart({
           onChange={(proximoRange) => {
             setRange(proximoRange)
             setOffset(0)
+            setSelecionados([])
           }}
         />
-        {range === '1ano' && <YearSwitcher ano={ano} onChange={setAno} />}
-        {range !== '1ano' && range !== 'total' && <PeriodSwitcher range={range} offset={offset} onChange={setOffset} />}
+        {range === '1ano' && (
+          <YearSwitcher
+            ano={ano}
+            onChange={(proximoAno) => {
+              setAno(proximoAno)
+              setSelecionados([])
+            }}
+          />
+        )}
+        {range !== '1ano' && range !== 'total' && (
+          <PeriodSwitcher
+            range={range}
+            offset={offset}
+            onChange={(proximoOffset) => {
+              setOffset(proximoOffset)
+              setSelecionados([])
+            }}
+          />
+        )}
       </div>
       <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
@@ -518,6 +609,14 @@ function IndicadorChart({
             <YAxis tick={{ fontSize: 11, fill: MUTED_TEXT }} axisLine={false} tickLine={false} width={44} />
             <Tooltip content={<ChartTooltip unidade={unidade} tipoValor={tipoValor} />} cursor={{ fill: 'rgba(0,110,109,0.07)' }} />
             <Bar dataKey="valor" fill={LINE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={22}>
+              {dadosBucket.map((bucket) => (
+                <Cell
+                  key={bucket.label}
+                  fill={!temSelecao || selecionados.includes(bucket.label) ? LINE_COLOR : INACTIVE_BAR_COLOR}
+                  cursor={bucket.valor === null ? 'default' : 'pointer'}
+                  onClick={() => bucket.valor !== null && alternarSelecao(bucket.label)}
+                />
+              ))}
               <LabelList dataKey="valor" content={(props) => <BarValueLabel {...props} unidade={unidade} tipoValor={tipoValor} />} />
             </Bar>
           </BarChart>

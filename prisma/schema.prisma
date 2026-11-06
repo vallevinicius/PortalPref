@@ -94,6 +94,7 @@ model Indicador {
   tipoValor      String    @default("numero") @map("tipo_valor") @db.VarChar(10)
   tipoGrafico    String    @default("barras") @map("tipo_grafico") @db.VarChar(10)
   categoria      String?   @db.VarChar(120)
+  modoTotalPadrao String   @default("soma") @map("modo_total_padrao") @db.VarChar(10)
   dataReferencia DateTime  @map("data_referencia") @db.Date
   createdBy      Int?      @map("created_by")
   createdAt      DateTime  @default(now()) @map("created_at")

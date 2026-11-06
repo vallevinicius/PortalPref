@@ -1,4 +1,5 @@
 import { UserRole } from '@prisma/client'
+import { isModoTotal, type ModoTotal } from '@/lib/modo-total'
 import { isTipoValor, type TipoValor } from '@/lib/format-valor'
 import { prisma } from '@/lib/prisma'
 import { isTipoGrafico, type TipoGrafico } from '@/lib/tipo-grafico'
@@ -54,6 +55,7 @@ export interface Indicador {
   tipo_valor: TipoValor
   tipo_grafico: TipoGrafico
   categoria: string | null
+  modo_total_padrao: ModoTotal
   data_referencia: string
 }
 
@@ -99,6 +101,7 @@ function mapIndicador(indicador: {
   tipoValor: string
   tipoGrafico: string
   categoria: string | null
+  modoTotalPadrao: string
   dataReferencia: Date
 }): Indicador {
   return {
@@ -109,6 +112,7 @@ function mapIndicador(indicador: {
     tipo_valor: isTipoValor(indicador.tipoValor) ? indicador.tipoValor : 'numero',
     tipo_grafico: isTipoGrafico(indicador.tipoGrafico) ? indicador.tipoGrafico : 'barras',
     categoria: indicador.categoria,
+    modo_total_padrao: isModoTotal(indicador.modoTotalPadrao) ? indicador.modoTotalPadrao : 'soma',
     data_referencia: formatDate(indicador.dataReferencia),
   }
 }
@@ -130,6 +134,7 @@ function mapProjeto(projeto: {
     tipoValor: string
     tipoGrafico: string
     categoria: string | null
+    modoTotalPadrao: string
     dataReferencia: Date
   }>
   indicadorEscalas: Array<{
@@ -172,6 +177,7 @@ const projetoRelations = {
       tipoValor: true,
       tipoGrafico: true,
       categoria: true,
+      modoTotalPadrao: true,
       dataReferencia: true,
     },
   },

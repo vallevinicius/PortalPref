@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { assertCanEdit, requireSession, UnauthorizedError, type SessionPayload } from '@/lib/auth'
 import { recordAuditLog } from '@/lib/audit-log'
+import { isModoTotal, type ModoTotal } from '@/lib/modo-total'
 import { isTipoValor, type TipoValor } from '@/lib/format-valor'
 import { prisma } from '@/lib/prisma'
 import { CATEGORIA_MAX_LENGTH, isTipoGrafico, type TipoGrafico } from '@/lib/tipo-grafico'
@@ -122,7 +123,7 @@ export async function createIndicador(
   // número lançado no gráfico existente — não a criação de um gráfico novo.
   const grupoJaExiste = await prisma.indicador.findFirst({
     where: { projetoId, titulo: validated.titulo },
-    select: { id: true, tipoValor: true, tipoGrafico: true },
+    select: { id: true, tipoValor: true, tipoGrafico: true, modoTotalPadrao: true },
   })
 
   // O tipo é definido na criação do gráfico; novos números lançados herdam o do grupo.
@@ -148,6 +149,7 @@ export async function createIndicador(
       tipoValor: tipoFinal,
       tipoGrafico: tipoGraficoFinal,
       categoria: categoriaFinal,
+      modoTotalPadrao: grupoJaExiste && isModoTotal(grupoJaExiste.modoTotalPadrao) ? grupoJaExiste.modoTotalPadrao : 'soma',
       dataReferencia: validated.dataReferencia,
       createdBy: session.userId,
     },
@@ -167,6 +169,37 @@ export async function createIndicador(
       projetoId: indicador.projetoId,
       secretariaId: projeto.secretariaId,
     },
+  })
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/secretarias/${projeto.secretariaId}`)
+  revalidatePath(`/admin/projetos/${projetoId}`)
+}
+
+// Define qual total (soma, diferença ou último dado) o gráfico mostra ao ser aberto.
+export async function setIndicadorModoTotalPadrao(projetoId: number, titulo: string, modoTotal: ModoTotal) {
+  const session = await requireSession('super_admin', 'secretaria_admin', 'projeto_admin')
+  assertCanEdit(session)
+  const projeto = await assertProjetoAccess(projetoId, session)
+
+  if (!isModoTotal(modoTotal)) {
+    throw new Error('Escolha entre soma, diferença ou último dado.')
+  }
+
+  const result = await prisma.indicador.updateMany({
+    where: { projetoId, titulo },
+    data: { modoTotalPadrao: modoTotal },
+  })
+
+  if (result.count === 0) {
+    throw new Error('Gráfico não encontrado.')
+  }
+
+  await recordAuditLog({
+    actorUserId: session.userId,
+    action: 'indicator.set_default_total',
+    entityType: 'indicator',
+    details: { titulo, modoTotal, projetoId, secretariaId: projeto.secretariaId },
   })
 
   revalidatePath('/admin')

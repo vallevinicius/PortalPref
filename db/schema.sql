@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS indicadores (
   tipo_valor VARCHAR(10) NOT NULL DEFAULT 'numero',
   tipo_grafico VARCHAR(10) NOT NULL DEFAULT 'barras',
   categoria VARCHAR(120) NULL,
+  modo_total_padrao VARCHAR(10) NOT NULL DEFAULT 'soma',
   data_referencia DATE NOT NULL,
   created_by INT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
