@@ -50,6 +50,7 @@ import {
   removeIndicadorEscala,
   renameIndicadorGrupo,
   setIndicadorEscala,
+  setIndicadorModoTotalPadrao,
   updateIndicador,
 } from '@/lib/actions/indicadores'
 
@@ -69,7 +70,7 @@ describe('ações de indicadores', () => {
 
     expect(prismaMock.indicador.findFirst).toHaveBeenCalledWith({
       where: { projetoId: 20, titulo: 'Atendimentos' },
-      select: { id: true, tipoValor: true, tipoGrafico: true },
+      select: { id: true, tipoValor: true, tipoGrafico: true, modoTotalPadrao: true },
     })
     expect(prismaMock.indicador.create).toHaveBeenCalledWith({
       data: {
@@ -80,6 +81,7 @@ describe('ações de indicadores', () => {
         tipoValor: 'numero',
         tipoGrafico: 'barras',
         categoria: null,
+        modoTotalPadrao: 'soma',
         dataReferencia: new Date('2026-03-15T00:00:00.000Z'),
         createdBy: 5,
       },
@@ -192,6 +194,17 @@ describe('ações de indicadores', () => {
       'Escolha se o gráfico é de barras ou de pizza.',
     )
     expect(prismaMock.indicador.create).not.toHaveBeenCalled()
+  })
+
+  it('novos lançamentos herdam o total padrão do gráfico existente', async () => {
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+    prismaMock.indicador.findFirst.mockResolvedValue({ id: 7, tipoValor: 'numero', tipoGrafico: 'barras', modoTotalPadrao: 'ultimo' })
+
+    await createIndicador(20, 'Atendimentos', 5, '', '2026-03-16')
+
+    expect(prismaMock.indicador.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ modoTotalPadrao: 'ultimo' }),
+    })
   })
 
   it('rejeita tipo de valor desconhecido antes de persistir', async () => {
@@ -464,5 +477,59 @@ describe('gráficos: renomear grupo, excluir grupo e configurar escala (super_ad
 
     requireSessionMock.mockResolvedValue({ userId: 9, role: 'projeto_admin', secretariaId: null, projetoIds: [21] })
     await expect(removeIndicadorEscala(20, 'Atendimentos')).rejects.toThrow('Você só pode gerenciar o seu próprio projeto.')
+  })
+})
+
+describe('gráficos: total padrão (soma, diferença ou último dado)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    prismaMock.projeto.findUnique.mockResolvedValue({ id: 20, secretariaId: 10 })
+    prismaMock.indicador.updateMany.mockResolvedValue({ count: 3 })
+  })
+
+  it('salva o total padrão em todos os lançamentos do gráfico e audita, para os três papéis autorizados', async () => {
+    requireSessionMock.mockResolvedValue({ userId: 1, role: 'super_admin', secretariaId: null, projetoIds: [] })
+    await setIndicadorModoTotalPadrao(20, 'Atendimentos', 'diferenca')
+    expect(prismaMock.indicador.updateMany).toHaveBeenCalledWith({
+      where: { projetoId: 20, titulo: 'Atendimentos' },
+      data: { modoTotalPadrao: 'diferenca' },
+    })
+    expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'indicator.set_default_total',
+        details: { titulo: 'Atendimentos', modoTotal: 'diferenca', projetoId: 20, secretariaId: 10 },
+      }),
+    })
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/projetos/20')
+
+    requireSessionMock.mockResolvedValue({ userId: 5, role: 'secretaria_admin', secretariaId: 10, projetoIds: [] })
+    await setIndicadorModoTotalPadrao(20, 'Atendimentos', 'ultimo')
+
+    requireSessionMock.mockResolvedValue({ userId: 9, role: 'projeto_admin', secretariaId: null, projetoIds: [20] })
+    await setIndicadorModoTotalPadrao(20, 'Atendimentos', 'soma')
+
+    expect(prismaMock.indicador.updateMany).toHaveBeenCalledTimes(3)
+  })
+
+  it('rejeita modo desconhecido sem persistir', async () => {
+    requireSessionMock.mockResolvedValue({ userId: 1, role: 'super_admin', secretariaId: null, projetoIds: [] })
+
+    await expect(setIndicadorModoTotalPadrao(20, 'Atendimentos', 'media' as never)).rejects.toThrow(
+      'Escolha entre soma, diferença ou último dado.',
+    )
+    expect(prismaMock.indicador.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('rejeita gráfico inexistente e bloqueia fora da posse (secretaria errada / projeto errado)', async () => {
+    requireSessionMock.mockResolvedValue({ userId: 1, role: 'super_admin', secretariaId: null, projetoIds: [] })
+    prismaMock.indicador.updateMany.mockResolvedValueOnce({ count: 0 })
+    await expect(setIndicadorModoTotalPadrao(20, 'Inexistente', 'soma')).rejects.toThrow('Gráfico não encontrado.')
+
+    requireSessionMock.mockResolvedValue({ userId: 5, role: 'secretaria_admin', secretariaId: 99, projetoIds: [] })
+    await expect(setIndicadorModoTotalPadrao(20, 'Atendimentos', 'soma')).rejects.toThrow('Este projeto não pertence à sua secretaria.')
+
+    requireSessionMock.mockResolvedValue({ userId: 9, role: 'projeto_admin', secretariaId: null, projetoIds: [21] })
+    await expect(setIndicadorModoTotalPadrao(20, 'Atendimentos', 'soma')).rejects.toThrow('Você só pode gerenciar o seu próprio projeto.')
+    expect(prismaMock.auditLog.create).toHaveBeenCalledTimes(0)
   })
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, KeyRound, Mail, PieChart as PieChartIcon, Plus, ScrollText, Search, ShieldPlus, Trash2, Users, UserPlus } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, KeyRound, Mail, PieChart as PieChartIcon, Plus, ScrollText, Search, ShieldPlus, Trash2, Users, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
@@ -841,7 +841,10 @@ function SuperAdminsSection({
   )
 }
 
+const ATRASADOS_POR_PAGINA = 5
+
 function ProjetosAtrasadosAlert({ projetosResumo }: { projetosResumo: ProjetoResumo[] }) {
+  const [pagina, setPagina] = useState(1)
   const atrasados = useMemo(() => {
     return projetosResumo
       .map((projeto) => ({ projeto, status: calcularStatusAtualizacao(projeto.ultima_atualizacao, projeto.prazo_atualizacao_dias) }))
@@ -850,6 +853,11 @@ function ProjetosAtrasadosAlert({ projetosResumo }: { projetosResumo: ProjetoRes
   }, [projetosResumo])
 
   if (atrasados.length === 0) return null
+
+  const totalPaginas = Math.max(1, Math.ceil(atrasados.length / ATRASADOS_POR_PAGINA))
+  const paginaAtual = Math.min(pagina, totalPaginas)
+  const inicio = (paginaAtual - 1) * ATRASADOS_POR_PAGINA
+  const itensDaPagina = atrasados.slice(inicio, inicio + ATRASADOS_POR_PAGINA)
 
   return (
     <div role="alert" className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
@@ -860,7 +868,7 @@ function ProjetosAtrasadosAlert({ projetosResumo }: { projetosResumo: ProjetoRes
         </p>
       </div>
       <div className="flex flex-col gap-1">
-        {atrasados.map(({ projeto, status }) => (
+        {itensDaPagina.map(({ projeto, status }) => (
           <Link
             key={projeto.id}
             href={`/admin/projetos/${projeto.id}`}
@@ -877,6 +885,35 @@ function ProjetosAtrasadosAlert({ projetosResumo }: { projetosResumo: ProjetoRes
           </Link>
         ))}
       </div>
+      {totalPaginas > 1 && (
+        <div className="flex items-center justify-between gap-2 px-2">
+          <p className="text-xs text-muted-foreground">
+            Página {paginaAtual} de {totalPaginas}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setPagina(Math.max(1, paginaAtual - 1))}
+              disabled={paginaAtual === 1}
+              aria-label="Página anterior"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setPagina(Math.min(totalPaginas, paginaAtual + 1))}
+              disabled={paginaAtual === totalPaginas}
+              aria-label="Próxima página"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
